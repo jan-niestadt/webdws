@@ -143,6 +143,8 @@ Per-table views kunnen als read-only of editable gemarkeerd worden. Views kunnen
 
 Per-table views kunnen erg groot worden, dus aan de clientkant houden we steeds maar 1 pagina in het geheugen. De XPath-expressies worden uitgevoerd op de eXist database (aan de serverkant dus). Bewerken van een cel gebeurt aan de client-kant (met dezelfde code waarmee een heel artikel bewerkt kan worden). Opslaan van een gewijzigde cel gebeurt weer aan de serverkant.
 
+Hoe precies bijgehouden wordt welke stukjes XML uit welke artikelen we aan het bewerken zijn, en hoe ze dus weer in hun oorspronkelijke artikel kunnen worden opgeslagen, is nog een open vraag. Worst-case moeten we het hele artikel naar de browser sturen, maar hopelijk kunnen we volstaan met een id van of pad naar de node. Er moet altijd gekeken worden of een andere gebruiker in de tussentijd niets gewijzigd heeft.
+
 De lemmalijst die in andere DWS'en te vinden is, is in feite ook een table view, dus daarvoor zal deze functionaliteit gebruikt kunnen worden.
 
 
@@ -167,8 +169,3 @@ Verdere uitwerking:
 - Undo/redo, autosave, backups
 - Multi-user, locking, per-user rechten
 - Styling
-
-
-### AI prompt voor beginproject
-
-Set up a starting project for a web-based XML editor. Use Docker and Compose. The project consists of three parts: a frontend using Vue 3 and TypeScript; a Java backend with endpoints to load and save XML documents; and the eXist-db database that actually stores the XML documents.
