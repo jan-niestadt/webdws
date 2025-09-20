@@ -1,0 +1,48 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: webdws-backend
+  
+  profiles:
+    active: docker
+  
+  datasource:
+    url: jdbc:postgresql://postgres:5432/webdws
+    username: webdws
+    password: webdws
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+exist:
+  db:
+    url: ${EXIST_DB_URL:http://localhost:8081}
+    username: ${EXIST_DB_USER:admin}
+    password: ${EXIST_DB_PASSWORD:}
+    collection: /db/webdws
+
+logging:
+  level:
+    com.webdws: DEBUG
+    org.springframework.web: DEBUG
+    org.exist: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

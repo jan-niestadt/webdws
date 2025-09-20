@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+    depends_on:
+      - backend
+    networks:
+      - webdws-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - EXIST_DB_URL=http://exist-db:8080
+      - EXIST_DB_USER=admin
+      - EXIST_DB_PASSWORD=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      exist-db:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - webdws-network
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=webdws
+      - POSTGRES_USER=webdws
+      - POSTGRES_PASSWORD=webdws
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webdws -d webdws"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - webdws-network
+
+  exist-db:
+    image: existdb/existdb:6.4.0
+    ports:
+      - "8081:8080"
+    environment:
+      - EXIST_ADMIN_PASSWORD=
+    volumes:
+      - exist-data:/opt/exist/data
+    networks:
+      - webdws-network
+
+volumes:
+  postgres-data:
+  exist-data:
+
+networks:
+  webdws-network:
+    driver: bridge
