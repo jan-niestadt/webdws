@@ -198,6 +198,8 @@ eXist-db heeft voor elke node een intern id wat we naar de client kunnen meestur
 
 De lemmalijst die in andere DWS'en te vinden is, is in feite ook een table view, dus daarvoor zal deze functionaliteit gebruikt kunnen worden.
 
+Om erachter te komen met welk gedeelte in het XML Schema een XML fragment in de tabel overeenkomt, stuurt de server altijd het pad van het rootelement naar dit element mee. Hiermee moeten we het juiste element in het XML Schema kunnen bepalen.
+
 
 ### Voorkomen van conflicterende edits
 
