@@ -8,6 +8,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * XmlDocumentController - REST API Controller for XML Document Operations
+ * 
+ * This controller provides REST endpoints for XML document management and handles:
+ * - CRUD operations for XML documents (GET, POST, PUT, DELETE)
+ * - Document validation and processing
+ * - Pagination and search functionality
+ * - Error handling and HTTP status management
+ * - CORS configuration for frontend integration
+ * - Request validation and response formatting
+ */
 @RestController
 @RequestMapping("/api/xml")
 @CrossOrigin(origins = "*")

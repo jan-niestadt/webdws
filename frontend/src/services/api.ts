@@ -1,3 +1,12 @@
+/**
+ * API Service - Backend Communication Layer
+ * 
+ * This service handles all communication with the backend API including:
+ * - XML document CRUD operations (create, read, update, delete)
+ * - Document validation and processing
+ * - Error handling and response formatting
+ * - Axios configuration and request/response interceptors
+ */
 import axios from 'axios';
 import type { XmlDocument, XmlDocumentList, SaveXmlRequest, ApiResponse } from '@/types/xml';
 
@@ -58,7 +67,10 @@ export const xmlApi = {
   // Validate XML content
   async validateXml(content: string): Promise<{ valid: boolean; error?: string }> {
     try {
-      const response = await api.post<ApiResponse<{ valid: boolean; error?: string }>>('/api/xml/validate', { content });
+      const response = await api.post<ApiResponse<{ valid: boolean; error?: string }>>('/api/xml/validate', { 
+        name: 'validation', 
+        content 
+      });
       if (response.data.success && response.data.data) {
         return response.data.data;
       }

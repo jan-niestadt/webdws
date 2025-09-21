@@ -1,3 +1,12 @@
+<!--
+  Main Application Component - WebDWS XML Editor
+  
+  This is the root component that provides:
+  - Application layout with header and navigation
+  - Router integration for single-page application routing
+  - Global styling and theme management
+  - Main content area for the XML editor interface
+-->
 <template>
   <div id="app">
     <header class="header">

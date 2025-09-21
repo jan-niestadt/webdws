@@ -1,3 +1,11 @@
+/**
+ * Main Application Entry Point
+ * 
+ * This file initializes the Vue 3 application with:
+ * - Vue Router for single-page application navigation
+ * - Main App component and routing configuration
+ * - Global styles and application mounting
+ */
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'

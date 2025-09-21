@@ -10,6 +10,16 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
+/**
+ * XmlDocumentRepository - Data Access Layer for XML Documents
+ * 
+ * This repository interface provides:
+ * - Standard CRUD operations through JpaRepository inheritance
+ * - Custom query methods for document retrieval
+ * - Integration with eXist-db ID mapping
+ * - Pagination support for large document collections
+ * - Search functionality by document name
+ */
 @Repository
 public interface XmlDocumentRepository extends JpaRepository<XmlDocument, Long> {
     

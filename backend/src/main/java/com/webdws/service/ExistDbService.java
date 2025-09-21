@@ -10,6 +10,16 @@ import jakarta.annotation.PostConstruct;
 import java.util.Base64;
 import java.util.UUID;
 
+/**
+ * ExistDbService - eXist-db Integration Service
+ * 
+ * This service provides integration with eXist-db XML database and handles:
+ * - XML document storage and retrieval from eXist-db
+ * - REST API communication with eXist-db server
+ * - Authentication and connection management
+ * - Collection management and document operations
+ * - Error handling and response processing
+ */
 @Service
 public class ExistDbService {
     

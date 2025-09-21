@@ -3,6 +3,15 @@ package com.webdws.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * ExistDbConfig - Configuration Properties for eXist-db Integration
+ * 
+ * This configuration class provides:
+ * - Externalized configuration for eXist-db connection parameters
+ * - Default values for development and production environments
+ * - Property binding from application.yml or environment variables
+ * - Centralized configuration management for XML database operations
+ */
 @Configuration
 @ConfigurationProperties(prefix = "exist.db")
 public class ExistDbConfig {

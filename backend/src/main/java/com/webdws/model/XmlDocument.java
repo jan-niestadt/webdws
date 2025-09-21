@@ -8,6 +8,16 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
+/**
+ * XmlDocument Entity - JPA Entity for XML Document Storage
+ * 
+ * This entity represents an XML document in the database and provides:
+ * - Primary key and metadata fields (id, name, timestamps)
+ * - XML content storage with TEXT column type for large documents
+ * - Integration with eXist-db for advanced XML processing
+ * - Validation constraints for data integrity
+ * - Automatic timestamp management for audit trails
+ */
 @Entity
 @Table(name = "xml_documents")
 public class XmlDocument {

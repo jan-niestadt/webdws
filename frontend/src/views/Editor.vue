@@ -1,3 +1,13 @@
+<!--
+  Main Editor View - XML Document Editor with Dual Mode Support
+  
+  This component provides:
+  - Text-based XML editing using Monaco Editor (read-only mode)
+  - Tree-based XML editing with visual node manipulation
+  - Document management (new, load, save, validate)
+  - Mode switching between text and tree editors
+  - XPath query interface integration
+-->
 <template>
   <div class="editor-container">
     <div class="editor-header">
@@ -11,6 +21,20 @@
         <span v-if="isModified" class="modified-indicator">*</span>
       </div>
       <div class="editor-actions">
+        <div class="mode-toggle">
+          <button 
+            @click="setMode('text')" 
+            :class="['btn', 'btn-sm', { 'active': editorMode === 'text' }]"
+          >
+            Text Editor
+          </button>
+          <button 
+            @click="setMode('tree')" 
+            :class="['btn', 'btn-sm', { 'active': editorMode === 'tree' }]"
+          >
+            Tree Editor
+          </button>
+        </div>
         <button @click="newDocument" class="btn btn-secondary">New</button>
         <button @click="loadDocument" class="btn btn-secondary">Load</button>
         <button @click="saveDocument" class="btn btn-success" :disabled="!isModified">Save</button>
@@ -46,7 +70,12 @@
           </span>
         </div>
         
-        <div class="monaco-editor-container" ref="editorContainer"></div>
+        <div v-if="editorMode === 'text'" class="monaco-editor-container" ref="editorContainer"></div>
+        <XmlTreeEditor 
+          v-else-if="editorMode === 'tree'"
+          v-model:xmlContent="xmlContent"
+          @tree-modified="handleTreeModified"
+        />
       </div>
     </div>
 
@@ -61,6 +90,7 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { xmlApi } from '@/services/api';
 import type { XmlDocument, SaveXmlRequest } from '@/types/xml';
 import * as monaco from 'monaco-editor';
+import XmlTreeEditor from '@/components/XmlTreeEditor.vue';
 
 // Reactive state
 const documentName = ref('');
@@ -72,6 +102,7 @@ const showDocumentList = ref(false);
 const documents = ref<XmlDocument[]>([]);
 const selectedDocument = ref<XmlDocument | null>(null);
 const validationResult = ref<{ valid: boolean; error?: string } | null>(null);
+const editorMode = ref<'text' | 'tree'>('text');
 
 // Editor instance
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
@@ -94,16 +125,17 @@ const initEditor = async () => {
     bracketPairColorization: { enabled: true },
     formatOnPaste: true,
     formatOnType: true,
+    readOnly: editorMode.value === 'text', // Make text editor read-only only in text mode
   });
 
-  // Listen for content changes
-  editor.onDidChangeModelContent(() => {
-    if (editor) {
-      xmlContent.value = editor.getValue();
-      isModified.value = true;
-      validationResult.value = null;
-    }
-  });
+  // Listen for content changes (disabled for read-only mode)
+  // editor.onDidChangeModelContent(() => {
+  //   if (editor) {
+  //     xmlContent.value = editor.getValue();
+  //     isModified.value = true;
+  //     validationResult.value = null;
+  //   }
+  // });
 };
 
 // Load documents list
@@ -151,6 +183,11 @@ const selectDocument = async (doc: XmlDocument) => {
 
 // Save document
 const saveDocument = async () => {
+  console.log('Save button clicked');
+  console.log('Document name:', documentName.value);
+  console.log('XML content length:', xmlContent.value.length);
+  console.log('Is modified:', isModified.value);
+  
   if (!documentName.value.trim() || !xmlContent.value.trim()) {
     error.value = 'Document name and content are required';
     return;
@@ -183,7 +220,7 @@ const saveDocument = async () => {
 const newDocument = () => {
   selectedDocument.value = null;
   documentName.value = '';
-  xmlContent.value = '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <!-- Your XML content here -->\n</root>';
+  xmlContent.value = '<?xml version="1.0" encoding="UTF-8"?>\n<root></root>';
   
   if (editor) {
     editor.setValue(xmlContent.value);
@@ -232,6 +269,39 @@ const validateXml = async () => {
 // Format date
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleString();
+};
+
+// Mode switching
+const setMode = async (mode: 'text' | 'tree') => {
+  console.log('Switching to mode:', mode);
+  console.log('Current XML content length:', xmlContent.value.length);
+  console.log('Current XML content preview:', xmlContent.value.substring(0, 100) + '...');
+  
+  editorMode.value = mode;
+  
+  if (mode === 'text') {
+    // Wait for the DOM to update
+    await nextTick();
+    
+    // Dispose existing editor if it exists
+    if (editor) {
+      editor.dispose();
+      editor = null;
+    }
+    
+    // Reinitialize the editor with current content
+    await initEditor();
+  } else if (editor) {
+    // Update existing editor for tree mode
+    editor.setValue(xmlContent.value);
+    editor.updateOptions({ readOnly: false });
+  }
+};
+
+// Handle tree modifications
+const handleTreeModified = (modified: boolean) => {
+  isModified.value = modified;
+  validationResult.value = null;
 };
 
 // Lifecycle
@@ -300,6 +370,37 @@ onUnmounted(() => {
 .editor-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: 1rem;
+  padding: 0.25rem;
+  background: #e9ecef;
+  border-radius: 6px;
+}
+
+.mode-toggle .btn {
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #6c757d;
+  padding: 0.375rem 0.75rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.mode-toggle .btn.active {
+  background: white;
+  color: #2c3e50;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.mode-toggle .btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.5);
+  color: #2c3e50;
 }
 
 .editor-content {

@@ -2,6 +2,16 @@ package com.webdws.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+/**
+ * ApiResponse - Generic API Response Wrapper
+ * 
+ * This DTO provides a standardized response format for all API endpoints and includes:
+ * - Success/failure status indication
+ * - Generic data payload for successful responses
+ * - Error message for failed responses
+ * - JSON serialization configuration
+ * - Static factory methods for common response patterns
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
     private boolean success;

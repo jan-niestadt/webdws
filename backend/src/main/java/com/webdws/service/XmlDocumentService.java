@@ -12,9 +12,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * XmlDocumentService - Business Logic Layer for XML Document Management
+ * 
+ * This service provides the core business logic for XML document operations and handles:
+ * - CRUD operations for XML documents with database persistence
+ * - Integration with eXist-db for advanced XML processing
+ * - Document validation and content management
+ * - Pagination and search functionality
+ * - Transaction management and error handling
+ * - DTO conversion and response formatting
+ */
 @Service
 @Transactional
 public class XmlDocumentService {

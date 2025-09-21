@@ -1,5 +1,14 @@
 package com.webdws.dto;
 
+/**
+ * ValidationResult - DTO for XML Validation Results
+ * 
+ * This DTO represents the result of XML validation operations and includes:
+ * - Validation status (valid/invalid)
+ * - Error message for invalid XML
+ * - Static factory methods for common validation results
+ * - Simple structure for API responses
+ */
 public class ValidationResult {
     private boolean valid;
     private String error;

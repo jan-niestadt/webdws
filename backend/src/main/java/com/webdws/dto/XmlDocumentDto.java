@@ -6,6 +6,16 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
+/**
+ * XmlDocumentDto - Data Transfer Object for XML Documents
+ * 
+ * This DTO represents an XML document in API requests and responses and includes:
+ * - Document metadata (id, name, timestamps)
+ * - XML content with validation constraints
+ * - JSON serialization configuration for date formatting
+ * - Validation annotations for data integrity
+ * - Conversion methods between entity and DTO representations
+ */
 public class XmlDocumentDto {
     private String id;
     

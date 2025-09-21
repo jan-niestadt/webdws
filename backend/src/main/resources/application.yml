@@ -1,6 +1,11 @@
+# WebDWS Backend Application Configuration
+# This configuration file defines the application settings for the XML document management backend
+
+# Server Configuration
 server:
   port: 8080
 
+# Spring Boot Application Configuration
 spring:
   application:
     name: webdws-backend
@@ -8,12 +13,14 @@ spring:
   profiles:
     active: docker
   
+  # Database Configuration - PostgreSQL for metadata storage
   datasource:
     url: jdbc:postgresql://postgres:5432/webdws
     username: webdws
     password: webdws
     driver-class-name: org.postgresql.Driver
   
+  # JPA/Hibernate Configuration
   jpa:
     hibernate:
       ddl-auto: update
@@ -23,6 +30,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
+# eXist-db Configuration - XML database for document storage
 exist:
   db:
     url: ${EXIST_DB_URL:http://localhost:8081}
@@ -30,6 +38,7 @@ exist:
     password: ${EXIST_DB_PASSWORD:}
     collection: /db/webdws
 
+# Logging Configuration
 logging:
   level:
     com.webdws: DEBUG
@@ -38,6 +47,7 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
+# Actuator Configuration - Health checks and monitoring
 management:
   endpoints:
     web:

@@ -1,6 +1,10 @@
+# WebDWS Docker Compose Configuration
+# This file defines the multi-container application stack for the XML document management system
+
 version: '3.8'
 
 services:
+  # Frontend Service - Vue.js XML Editor Application
   frontend:
     build:
       context: ./frontend
@@ -17,6 +21,7 @@ services:
     networks:
       - webdws-network
 
+  # Backend Service - Spring Boot REST API
   backend:
     build:
       context: ./backend
@@ -37,6 +42,7 @@ services:
     networks:
       - webdws-network
 
+  # PostgreSQL Database - Metadata Storage
   postgres:
     image: postgres:15-alpine
     ports:
@@ -55,6 +61,7 @@ services:
     networks:
       - webdws-network
 
+  # eXist-db - XML Database for Document Storage
   exist-db:
     image: existdb/existdb:6.4.0
     ports:
@@ -66,10 +73,12 @@ services:
     networks:
       - webdws-network
 
+# Persistent Volume Definitions
 volumes:
-  postgres-data:
-  exist-data:
+  postgres-data:    # PostgreSQL data persistence
+  exist-data:       # eXist-db data persistence
 
+# Network Configuration
 networks:
   webdws-network:
     driver: bridge

@@ -3,6 +3,15 @@ package com.webdws.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/**
+ * SaveXmlRequest - Request DTO for XML Document Creation/Update
+ * 
+ * This DTO represents the request payload for saving XML documents and includes:
+ * - Document name with validation constraints
+ * - XML content with required validation
+ * - Input validation for data integrity
+ * - Simple structure for frontend integration
+ */
 public class SaveXmlRequest {
     
     @NotBlank(message = "Document name is required")
