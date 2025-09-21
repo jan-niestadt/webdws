@@ -26,7 +26,7 @@
             @click="setMode('text')" 
             :class="['btn', 'btn-sm', { 'active': editorMode === 'text' }]"
           >
-            Text Editor
+            XML View
           </button>
           <button 
             @click="setMode('tree')" 
@@ -73,8 +73,10 @@
         <div v-if="editorMode === 'text'" class="monaco-editor-container" ref="editorContainer"></div>
         <XmlTreeEditor 
           v-else-if="editorMode === 'tree'"
-          v-model:xmlContent="xmlContent"
+          :initial-xml-content="initialTreeContent"
+          @xml-changed="handleXmlChanged"
           @tree-modified="handleTreeModified"
+          ref="treeEditorRef"
         />
       </div>
     </div>
@@ -103,14 +105,19 @@ const documents = ref<XmlDocument[]>([]);
 const selectedDocument = ref<XmlDocument | null>(null);
 const validationResult = ref<{ valid: boolean; error?: string } | null>(null);
 const editorMode = ref<'text' | 'tree'>('text');
+const initialTreeContent = ref('');
 
 // Editor instance
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
 const editorContainer = ref<HTMLElement>();
+const treeEditorRef = ref<InstanceType<typeof XmlTreeEditor>>();
 
 // Initialize Monaco Editor
 const initEditor = async () => {
   if (!editorContainer.value) return;
+
+  console.log('initEditor called with mode:', editorMode.value);
+  console.log('initEditor XML content:', xmlContent.value.substring(0, 100) + '...');
 
   editor = monaco.editor.create(editorContainer.value, {
     value: xmlContent.value,
@@ -123,19 +130,22 @@ const initEditor = async () => {
     lineNumbers: 'on',
     folding: true,
     bracketPairColorization: { enabled: true },
-    formatOnPaste: true,
-    formatOnType: true,
+    formatOnPaste: editorMode.value === 'tree', // Only allow formatting in tree mode
+    formatOnType: editorMode.value === 'tree',  // Only allow formatting in tree mode
     readOnly: editorMode.value === 'text', // Make text editor read-only only in text mode
   });
 
-  // Listen for content changes (disabled for read-only mode)
-  // editor.onDidChangeModelContent(() => {
-  //   if (editor) {
-  //     xmlContent.value = editor.getValue();
-  //     isModified.value = true;
-  //     validationResult.value = null;
-  //   }
-  // });
+  // Only listen for content changes in tree mode (when editor is editable)
+  if (editorMode.value === 'tree' && editor) {
+    editor.onDidChangeModelContent(() => {
+      if (editor) {
+        xmlContent.value = editor.getValue();
+        isModified.value = true;
+        validationResult.value = null;
+      }
+    });
+  }
+  // In text mode, the editor is read-only and should never trigger content changes
 };
 
 // Load documents list
@@ -167,6 +177,7 @@ const selectDocument = async (doc: XmlDocument) => {
     selectedDocument.value = fullDoc;
     documentName.value = fullDoc.name;
     xmlContent.value = fullDoc.content;
+    initialTreeContent.value = fullDoc.content;
     
     if (editor) {
       editor.setValue(fullDoc.content);
@@ -185,10 +196,16 @@ const selectDocument = async (doc: XmlDocument) => {
 const saveDocument = async () => {
   console.log('Save button clicked');
   console.log('Document name:', documentName.value);
-  console.log('XML content length:', xmlContent.value.length);
   console.log('Is modified:', isModified.value);
   
-  if (!documentName.value.trim() || !xmlContent.value.trim()) {
+  // Get current XML content from tree editor if in tree mode
+  let currentXmlContent = xmlContent.value;
+  if (editorMode.value === 'tree' && treeEditorRef.value) {
+    currentXmlContent = treeEditorRef.value.getCurrentXmlContent();
+    console.log('Getting XML content from tree editor:', currentXmlContent.substring(0, 100) + '...');
+  }
+  
+  if (!documentName.value.trim() || !currentXmlContent.trim()) {
     error.value = 'Document name and content are required';
     return;
   }
@@ -197,7 +214,7 @@ const saveDocument = async () => {
     isLoading.value = true;
     const documentData: SaveXmlRequest = {
       name: documentName.value.trim(),
-      content: xmlContent.value
+      content: currentXmlContent
     };
 
     if (selectedDocument.value) {
@@ -221,6 +238,7 @@ const newDocument = () => {
   selectedDocument.value = null;
   documentName.value = '';
   xmlContent.value = '<?xml version="1.0" encoding="UTF-8"?>\n<root></root>';
+  initialTreeContent.value = xmlContent.value;
   
   if (editor) {
     editor.setValue(xmlContent.value);
@@ -289,18 +307,38 @@ const setMode = async (mode: 'text' | 'tree') => {
       editor = null;
     }
     
-    // Reinitialize the editor with current content
+    // Reinitialize the editor with current content (read-only)
+    console.log('Initializing XML view with content:', xmlContent.value.substring(0, 100) + '...');
     await initEditor();
-  } else if (editor) {
-    // Update existing editor for tree mode
-    editor.setValue(xmlContent.value);
-    editor.updateOptions({ readOnly: false });
+  } else {
+    // Switching to tree mode - dispose and recreate editor to ensure clean state
+    if (editor) {
+      editor.dispose();
+      editor = null;
+    }
+    
+    // Update initial tree content with current XML content
+    initialTreeContent.value = xmlContent.value;
+    
+    // Wait for DOM update and recreate editor in tree mode
+    console.log('Initializing tree editor with content:', xmlContent.value.substring(0, 100) + '...');
+    await nextTick();
+    await initEditor();
   }
 };
 
 // Handle tree modifications
 const handleTreeModified = (modified: boolean) => {
   isModified.value = modified;
+  validationResult.value = null;
+};
+
+// Handle XML content changes from tree editor
+const handleXmlChanged = (newContent: string) => {
+  console.log('XML content changed from tree editor:', newContent.substring(0, 100) + '...');
+  // Update xmlContent.value so XML view shows current content
+  xmlContent.value = newContent;
+  isModified.value = true;
   validationResult.value = null;
 };
 

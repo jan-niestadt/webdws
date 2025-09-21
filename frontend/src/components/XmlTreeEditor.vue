@@ -71,10 +71,10 @@
     </div>
 
     <!-- XPath Query Panel -->
-    <XPathQuery :xmlContent="props.xmlContent" />
+    <XPathQuery :xmlContent="getCurrentXmlContent()" />
 
     <!-- Node Properties Panel -->
-    <div v-if="selectedNode" class="properties-panel">
+    <div v-if="selectedNode && editingNode" class="properties-panel">
       <h4>Node Properties</h4>
       <div class="property-group">
         <label>Type:</label>
@@ -104,26 +104,26 @@
         <label>Attributes:</label>
         <div class="attributes-list">
           <div 
-            v-for="(value, key) in selectedNode.attributes" 
+            v-for="(_, key) in selectedNode.attributes" 
             :key="key"
             class="attribute-item"
           >
             <input 
-              v-model="editingAttributeKeys[key]" 
-              @blur="updateAttributeKey(key, editingAttributeKeys[key])"
-              @keyup.enter="updateAttributeKey(key, editingAttributeKeys[key])"
-              :class="['attribute-key', { 'invalid': !isValidAttributeName(editingAttributeKeys[key]) }]"
+              v-model="editingAttributeKeys[key as string]" 
+              @blur="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
+              @keyup.enter="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
+              :class="['attribute-key', { 'invalid': !isValidAttributeName(editingAttributeKeys[key as string]) }]"
               placeholder="Attribute name"
               title="Attribute names must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens"
             />
             <input 
-              v-model="selectedNode.attributes![key]" 
-              @blur="updateAttributeValue(key, selectedNode.attributes![key])"
-              @keyup.enter="updateAttributeValue(key, selectedNode.attributes![key])"
+              v-model="selectedNode.attributes![key as string]" 
+              @blur="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
+              @keyup.enter="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
               class="attribute-value"
               placeholder="Attribute value"
             />
-            <button @click="removeAttribute(key)" class="btn-remove-attr" title="Remove attribute">×</button>
+            <button @click="removeAttribute(key as string)" class="btn-remove-attr" title="Remove attribute">×</button>
           </div>
           <button @click="addAttribute" class="btn btn-sm">Add Attribute</button>
         </div>
@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
@@ -141,12 +141,12 @@ import { xmlService } from '@/services/xmlService';
 
 // Props
 const props = defineProps<{
-  xmlContent: string;
+  initialXmlContent: string;
 }>();
 
 // Emits
 const emit = defineEmits<{
-  'update:xmlContent': [content: string];
+  'xml-changed': [content: string];
   'tree-modified': [modified: boolean];
 }>();
 
@@ -369,8 +369,9 @@ const toggleNode = (nodeId: string) => {
   }
 };
 
-const editNode = (nodeId: string, field: string, value: any) => {
-  console.log('editNode called:', { nodeId, field, value });
+const editNode = (editData: { nodeId: string; field: string; value: any }) => {
+  console.log('editNode called:', editData);
+  const { nodeId, field, value } = editData;
   const node = findNodeById(treeState.value.root!, nodeId);
   if (!node) {
     console.log('Node not found:', nodeId);
@@ -451,16 +452,25 @@ const addComment = () => {
   selectNode(newComment.id);
 };
 
+const removeNode = (nodeId: string) => {
+  const node = findNodeById(treeState.value.root!, nodeId);
+  if (!node || node === treeState.value.root) return;
+  
+  const parent = findNodeById(treeState.value.root!, node.parent!);
+  if (parent) {
+    parent.children = parent.children.filter(child => child.id !== nodeId);
+    if (treeState.value.selectedNodeId === nodeId) {
+      treeState.value.selectedNodeId = null;
+    }
+    markModified();
+  }
+};
+
 const deleteNode = () => {
   if (!selectedNode.value || isRoot.value) return;
   
-  const parent = findNodeById(treeState.value.root!, selectedNode.value.parent!);
-  if (parent) {
-    parent.children = parent.children.filter(child => child.id !== selectedNode.value!.id);
-    treeState.value.selectedNodeId = null;
-    editingNode.value = null;
-    markModified();
-  }
+  removeNode(selectedNode.value.id);
+  editingNode.value = null;
 };
 
 const updateNode = () => {
@@ -591,90 +601,79 @@ const createRootElement = () => {
 const markModified = () => {
   treeState.value.modified = true;
   emit('tree-modified', true);
+  // Emit XML content immediately after marking as modified
+  emitXmlContent();
 };
+
+// Get current XML content as string
+const getCurrentXmlContent = (): string => {
+  if (treeState.value.root) {
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + treeToXml(treeState.value.root);
+  }
+  return '';
+};
+
+let emitCounter = 0;
 
 const emitXmlContent = () => {
-  if (treeState.value.root && !isUpdatingFromExternal && !isEmittingContent) {
-    const xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n' + treeToXml(treeState.value.root);
-    console.log('Emitting XML content update:', xmlContent.substring(0, 100) + '...');
+  if (treeState.value.root) {
+    emitCounter++;
+    const xmlContent = getCurrentXmlContent();
+    console.log(`Emitting XML content update #${emitCounter}:`, xmlContent.substring(0, 100) + '...');
     
-    // Temporarily disable the watcher
-    shouldWatchContent.value = false;
-    isEmittingContent = true;
-    
-    emit('update:xmlContent', xmlContent);
+    emit('xml-changed', xmlContent);
     emit('tree-modified', true);
-    
-    // Re-enable the watcher after the update cycle completes
-    nextTick(() => {
-      isEmittingContent = false;
-      shouldWatchContent.value = true;
-    });
   }
 };
 
-// Watch for tree changes and emit updates
-watch(() => treeState.value.modified, (modified) => {
-  if (modified && !isEmittingContent) {
-    emitXmlContent();
-  }
-});
+// Note: emitXmlContent is now called directly in markModified()
 
-// Sync tree state with external XML content when it changes
-let isUpdatingFromExternal = false;
-let isEmittingContent = false;
-
-// Create a ref to control the watcher
-const shouldWatchContent = ref(true);
-
-watch(() => props.xmlContent, async (newContent) => {
-  console.log('XML content watcher triggered with:', newContent?.substring(0, 200) + '...');
-  console.log('isUpdatingFromExternal:', isUpdatingFromExternal);
-  console.log('isEmittingContent:', isEmittingContent);
-  console.log('shouldWatchContent:', shouldWatchContent.value);
-  
-  if (!shouldWatchContent.value || isUpdatingFromExternal || isEmittingContent) {
-    console.log('Skipping watcher update - conditions not met');
-    return;
-  }
-  
-  if (newContent && newContent.trim()) {
-    const currentXml = treeState.value.root ? '<?xml version="1.0" encoding="UTF-8"?>\n' + treeToXml(treeState.value.root) : '';
-    console.log('Current XML from tree:', currentXml.substring(0, 200) + '...');
-    console.log('New XML content:', newContent.substring(0, 200) + '...');
-    console.log('Are they different?', currentXml !== newContent);
-    
-    if (currentXml !== newContent) {
-      console.log('Updating tree from external content');
-      isUpdatingFromExternal = true;
-      const parsed = await parseXmlToTree(newContent);
-      if (parsed) {
-        treeState.value.root = parsed;
-        treeState.value.modified = false;
-        console.log('Tree updated successfully');
-      } else {
-        console.error('Failed to parse XML into tree');
-      }
-      // Use nextTick to ensure the flag is reset after the current update cycle
-      await nextTick();
-      isUpdatingFromExternal = false;
-    } else {
-      console.log('Content is the same, no update needed');
-    }
-  } else if (!newContent || newContent.trim() === '') {
-    console.log('Clearing tree state');
-    treeState.value.root = null;
-    treeState.value.selectedNodeId = null;
-    treeState.value.modified = false;
-  }
-}, { immediate: true, flush: 'post' });
-
-// Initialize
-onMounted(async () => {
-  if (props.xmlContent && props.xmlContent.trim()) {
-    const parsed = await parseXmlToTree(props.xmlContent);
+// Method to update tree content from external source
+const updateTreeContent = async (xmlContent: string) => {
+  console.log('updateTreeContent called with:', xmlContent.substring(0, 100) + '...');
+  if (xmlContent && xmlContent.trim()) {
+    const parsed = await parseXmlToTree(xmlContent);
     if (parsed) {
       treeState.value.root = parsed;
+      treeState.value.modified = false;
+      console.log('Tree content updated successfully');
+    } else {
+      console.error('Failed to parse XML content for update');
+    }
+  }
+};
+
+// Expose methods to parent
+defineExpose({
+  getCurrentXmlContent,
+  updateTreeContent
+});
+
+// Watch for changes to initial XML content
+watch(() => props.initialXmlContent, async (newContent) => {
+  if (newContent && newContent.trim()) {
+    console.log('Initial XML content changed:', newContent.substring(0, 100) + '...');
+    const parsed = await parseXmlToTree(newContent);
+    if (parsed) {
+      treeState.value.root = parsed;
+      treeState.value.modified = false;
+      console.log('Tree content updated from prop');
+    } else {
+      console.error('Failed to parse updated XML content');
+    }
+  }
+}, { immediate: true });
+
+// Initialize tree with initial XML content
+onMounted(async () => {
+  if (props.initialXmlContent && props.initialXmlContent.trim()) {
+    console.log('Initializing tree with content:', props.initialXmlContent.substring(0, 100) + '...');
+    const parsed = await parseXmlToTree(props.initialXmlContent);
+    if (parsed) {
+      treeState.value.root = parsed;
+      console.log('Tree initialized successfully');
+    } else {
+      console.error('Failed to parse initial XML content');
     }
   }
 });

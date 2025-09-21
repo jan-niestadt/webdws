@@ -111,15 +111,14 @@
         :selected-id="selectedId"
         @select="$emit('select', $event)"
         @toggle="$emit('toggle', $event)"
-        @edit="$emit('edit', $event.nodeId, $event.field, $event.value)"
-        @add-child="$emit('add-child', $event, $event)"
+        @edit="$emit('edit', $event)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, nextTick } from 'vue';
+import { computed, ref, nextTick, watch } from 'vue';
 import type { XmlNode } from '@/types/xml';
 
 // Props
@@ -132,14 +131,22 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select': [nodeId: string];
   'toggle': [nodeId: string];
-  'edit': [nodeId: string, field: string, value: any];
-  'add-child': [parentId: string, newNode: XmlNode];
+  'edit': [editData: { nodeId: string; field: string; value: any }];
 }>();
 
 // Reactive state for inline editing
 const isEditing = ref(false);
 const editingValue = ref('');
 const editInput = ref<HTMLInputElement | null>(null);
+
+// Watch for external changes to node value
+watch(() => props.node.value, (newValue) => {
+  console.log('Node value changed externally:', newValue);
+  if (!isEditing.value) {
+    // Only update editingValue if we're not currently editing
+    editingValue.value = newValue || '';
+  }
+});
 
 // Computed
 const isSelected = computed(() => {
@@ -186,8 +193,10 @@ const getAttributesString = (): string => {
 const startInlineEdit = async () => {
   if (!['text', 'comment', 'cdata'].includes(props.node.type)) return;
   
+  console.log('startInlineEdit called for node:', props.node.id, 'value:', props.node.value);
   isEditing.value = true;
   editingValue.value = props.node.value || '';
+  console.log('editingValue set to:', editingValue.value);
   
   await nextTick();
   if (editInput.value) {
