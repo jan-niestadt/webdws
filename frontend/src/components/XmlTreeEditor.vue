@@ -13,7 +13,27 @@
   <div class="xml-tree-editor">
     <div class="tree-toolbar">
       <div class="toolbar-left">
+        <!-- Schema-aware element addition -->
+        <div v-if="schemaInfo && selectedNode && canHaveChildren(selectedNode)" class="element-dropdown">
+          <select 
+            @change="addElementFromSchema" 
+            class="btn btn-sm"
+            :disabled="!selectedNode || !canHaveChildren(selectedNode) || isLoadingAllowedContent"
+          >
+            <option value="">
+              {{ isLoadingAllowedContent ? 'Loading...' : 'Add Element...' }}
+            </option>
+            <option 
+              v-for="element in getAllowedElements()" 
+              :key="element" 
+              :value="element"
+            >
+              {{ element }}
+            </option>
+          </select>
+        </div>
         <button 
+          v-else
           @click="addElement" 
           class="btn btn-sm" 
           :disabled="!selectedNode || !canHaveChildren(selectedNode)"
@@ -71,61 +91,108 @@
     </div>
 
     <!-- XPath Query Panel -->
-    <XPathQuery :xmlContent="getCurrentXmlContent()" />
+    <div class="collapsible-panel">
+      <div class="panel-header" @click="showXPathPanel = !showXPathPanel">
+        <h4>XPath 3.1 Query</h4>
+        <span class="panel-toggle">{{ showXPathPanel ? '▼' : '▶' }}</span>
+      </div>
+      <div v-if="showXPathPanel" class="panel-content">
+        <XPathQuery :xmlContent="getCurrentXmlContent()" />
+      </div>
+    </div>
 
     <!-- Node Properties Panel -->
-    <div v-if="selectedNode && editingNode" class="properties-panel">
-      <h4>Node Properties</h4>
-      <div class="property-group">
-        <label>Type:</label>
-        <span class="node-type">{{ selectedNode.type }}</span>
+    <div v-if="selectedNode && editingNode" class="collapsible-panel">
+      <div class="panel-header" @click="showPropertiesPanel = !showPropertiesPanel">
+        <h4>Node Properties</h4>
+        <span class="panel-toggle">{{ showPropertiesPanel ? '▼' : '▶' }}</span>
       </div>
-      
-      <div v-if="selectedNode.type === 'element'" class="property-group">
-        <label>Name:</label>
-        <input 
-          v-model="editingNode.name" 
-          @blur="updateNode"
-          class="property-input"
-        />
-      </div>
-      
-      <div v-if="selectedNode.type === 'text' || selectedNode.type === 'comment'" class="property-group">
-        <label>Value:</label>
-        <textarea 
-          v-model="editingNode.value" 
-          @blur="updateNode"
-          class="property-textarea"
-          rows="3"
-        ></textarea>
-      </div>
-      
-      <div v-if="selectedNode.type === 'element'" class="property-group">
-        <label>Attributes:</label>
-        <div class="attributes-list">
-          <div 
-            v-for="(_, key) in selectedNode.attributes" 
-            :key="key"
-            class="attribute-item"
-          >
-            <input 
-              v-model="editingAttributeKeys[key as string]" 
-              @blur="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
-              @keyup.enter="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
-              :class="['attribute-key', { 'invalid': !isValidAttributeName(editingAttributeKeys[key as string]) }]"
-              placeholder="Attribute name"
-              title="Attribute names must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens"
-            />
-            <input 
-              v-model="selectedNode.attributes![key as string]" 
-              @blur="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
-              @keyup.enter="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
-              class="attribute-value"
-              placeholder="Attribute value"
-            />
-            <button @click="removeAttribute(key as string)" class="btn-remove-attr" title="Remove attribute">×</button>
+      <div v-if="showPropertiesPanel" class="panel-content">
+        <div class="property-group">
+          <label>Type:</label>
+          <span class="node-type">{{ selectedNode.type }}</span>
+        </div>
+        
+        <div v-if="selectedNode.type === 'element'" class="property-group">
+          <label>Name:</label>
+          <input 
+            v-model="editingNode.name" 
+            @blur="updateNode"
+            class="property-input"
+          />
+        </div>
+        
+        <div v-if="selectedNode.type === 'text' || selectedNode.type === 'comment'" class="property-group">
+          <label>Value:</label>
+          <textarea 
+            v-model="editingNode.value" 
+            @blur="updateNode"
+            class="property-textarea"
+            rows="3"
+          ></textarea>
+        </div>
+        
+        <div v-if="selectedNode.type === 'element'" class="property-group">
+          <label>Attributes:</label>
+          <div class="attributes-list">
+            <div 
+              v-for="(_, key) in selectedNode.attributes" 
+              :key="key"
+              class="attribute-item"
+            >
+              <input 
+                v-model="editingAttributeKeys[key as string]" 
+                @blur="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
+                @keyup.enter="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
+                :class="['attribute-key', { 'invalid': !isValidAttributeName(editingAttributeKeys[key as string]) }]"
+                placeholder="Attribute name"
+                title="Attribute names must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens"
+              />
+              <input 
+                v-model="selectedNode.attributes![key as string]" 
+                @blur="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
+                @keyup.enter="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
+                class="attribute-value"
+                placeholder="Attribute value"
+              />
+              <button @click="removeAttribute(key as string)" class="btn-remove-attr" title="Remove attribute">×</button>
+            </div>
+            <button @click="addAttribute" class="btn btn-sm">Add Attribute</button>
           </div>
-          <button @click="addAttribute" class="btn btn-sm">Add Attribute</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schema-aware allowed content information -->
+    <div v-if="allowedContent && selectedNode" class="collapsible-panel">
+      <div class="panel-header" @click="showAllowedContentPanel = !showAllowedContentPanel">
+        <h4>Allowed Content</h4>
+        <span class="panel-toggle">{{ showAllowedContentPanel ? '▼' : '▶' }}</span>
+      </div>
+      <div v-if="showAllowedContentPanel" class="panel-content">
+        <div v-if="allowedContent.elements.length > 0" class="content-group">
+          <label>Elements:</label>
+          <div class="allowed-elements">
+            <div v-for="element in allowedContent.elements" :key="element.name" class="allowed-item">
+              <span class="element-name">{{ element.name }}</span>
+              <span class="occurrence-info">
+                ({{ element.currentCount }}/{{ element.maxOccurs === 'unbounded' ? '∞' : element.maxOccurs }})
+              </span>
+              <span v-if="element.canAdd" class="can-add">✓</span>
+              <span v-else class="cannot-add">✗</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="allowedContent.attributes.length > 0" class="content-group">
+          <label>Attributes:</label>
+          <div class="allowed-attributes">
+            <div v-for="attr in allowedContent.attributes" :key="attr.name" class="allowed-item">
+              <span class="attribute-name">{{ attr.name }}</span>
+              <span v-if="attr.required" class="required">*</span>
+              <span v-if="attr.present" class="present">✓</span>
+              <span v-else class="not-present">✗</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -137,11 +204,13 @@ import { ref, computed, watch, onMounted } from 'vue';
 import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
-import { xmlService } from '@/services/xmlService';
+import { xmlService, type SchemaInfo, type AllowedContent } from '@/services/xmlService';
 
 // Props
 const props = defineProps<{
   initialXmlContent: string;
+  schemaInfo?: SchemaInfo | null;
+  schemaContent?: string | null;
 }>();
 
 // Emits
@@ -156,6 +225,14 @@ const treeState = ref<XmlTreeState>({
   selectedNodeId: null,
   modified: false
 });
+
+const allowedContent = ref<AllowedContent | null>(null);
+const isLoadingAllowedContent = ref(false);
+
+// Panel visibility state
+const showPropertiesPanel = ref(true);
+const showAllowedContentPanel = ref(false);
+const showXPathPanel = ref(false);
 
 const editingNode = ref<XmlNode | null>(null);
 const editingAttributeKeys = ref<{ [key: string]: string }>({});
@@ -288,6 +365,57 @@ const canHaveChildren = (node: XmlNode): boolean => {
   return node.type === 'element';
 };
 
+// Check if an element is allowed by the schema
+const isElementAllowed = (elementName: string): boolean => {
+  if (!allowedContent.value) {
+    return true; // No schema restrictions
+  }
+
+  const element = allowedContent.value.elements.find(el => el.name === elementName);
+  return element ? element.canAdd : false;
+};
+
+// Get allowed elements for the current context
+const getAllowedElements = (): string[] => {
+  if (!allowedContent.value) {
+    return ['element']; // Default element name
+  }
+
+  return allowedContent.value.elements
+    .filter(el => el.canAdd)
+    .map(el => el.name);
+};
+
+// Update allowed content when selection changes
+const updateAllowedContent = async () => {
+  if (!props.schemaContent || !selectedNode.value) {
+    allowedContent.value = null;
+    return;
+  }
+
+  try {
+    isLoadingAllowedContent.value = true;
+    const currentXml = getCurrentXmlContent();
+    const result = await xmlService.getAllowedContentAtPosition(
+      currentXml,
+      props.schemaContent
+    );
+
+    if (result.success && result.allowedContent) {
+      allowedContent.value = result.allowedContent;
+      console.log('Updated allowed content:', result.allowedContent);
+    } else {
+      console.warn('Failed to get allowed content:', result.error);
+      allowedContent.value = null;
+    }
+  } catch (error) {
+    console.error('Error updating allowed content:', error);
+    allowedContent.value = null;
+  } finally {
+    isLoadingAllowedContent.value = false;
+  }
+};
+
 const treeToXml = (node: XmlNode, indent: number = 0): string => {
   console.log('treeToXml called with node:', node);
   
@@ -360,6 +488,9 @@ const selectNode = (nodeId: string) => {
       node.attributes = {};
     }
   }
+  
+  // Update allowed content when selection changes
+  updateAllowedContent();
 };
 
 const toggleNode = (nodeId: string) => {
@@ -410,16 +541,55 @@ const addChildNode = (parentId: string, newNode: XmlNode) => {
 const addElement = () => {
   if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
   
+  // Get allowed elements for the current context
+  const allowedElements = getAllowedElements();
+  if (allowedElements.length === 0) {
+    console.warn('No elements allowed by schema for this context');
+    return;
+  }
+  
+  // Use the first allowed element name, or prompt user for selection
+  const elementName = allowedElements[0];
+  
   const newElement: XmlNode = {
     id: generateId(),
     type: 'element',
-    name: 'newElement',
+    name: elementName,
     children: [],
     parent: selectedNode.value.id
   };
   
   addChildNode(selectedNode.value.id, newElement);
   selectNode(newElement.id);
+};
+
+const addElementFromSchema = (event: Event) => {
+  const target = event.target as HTMLSelectElement;
+  const elementName = target.value;
+  
+  if (!elementName || !selectedNode.value || !canHaveChildren(selectedNode.value)) {
+    target.value = ''; // Reset dropdown
+    return;
+  }
+  
+  // Check if element is allowed by schema
+  if (!isElementAllowed(elementName)) {
+    console.warn(`Element '${elementName}' is not allowed by schema`);
+    target.value = ''; // Reset dropdown
+    return;
+  }
+  
+  const newElement: XmlNode = {
+    id: generateId(),
+    type: 'element',
+    name: elementName,
+    children: [],
+    parent: selectedNode.value.id
+  };
+  
+  addChildNode(selectedNode.value.id, newElement);
+  selectNode(newElement.id);
+  target.value = ''; // Reset dropdown
 };
 
 const addText = () => {
@@ -865,5 +1035,143 @@ onMounted(async () => {
 .btn-danger:hover:not(:disabled) {
   background: #c0392b;
   border-color: #c0392b;
+}
+
+.element-dropdown select {
+  appearance: none;
+  background: #007bff;
+  color: white;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.element-dropdown select:hover:not(:disabled) {
+  background: #0056b3;
+  border-color: #0056b3;
+}
+
+.element-dropdown select:disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.allowed-content-panel {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.allowed-content-panel h4 {
+  margin: 0 0 0.5rem 0;
+  color: #495057;
+  font-size: 1rem;
+}
+
+.content-group {
+  margin: 0.5rem 0;
+}
+
+.content-group label {
+  display: block;
+  font-weight: bold;
+  color: #495057;
+  margin-bottom: 0.25rem;
+}
+
+.allowed-elements, .allowed-attributes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.allowed-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 3px;
+  font-size: 0.875rem;
+}
+
+.element-name, .attribute-name {
+  font-weight: bold;
+  color: #007bff;
+}
+
+.occurrence-info {
+  color: #6c757d;
+  font-size: 0.75rem;
+}
+
+.can-add {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.cannot-add {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.required {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.present {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.not-present {
+  color: #6c757d;
+}
+
+.collapsible-panel {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.panel-header {
+  background: #e9ecef;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.panel-header:hover {
+  background: #dee2e6;
+}
+
+.panel-header h3,
+.panel-header h4 {
+  margin: 0;
+  color: #495057;
+  font-size: 1rem;
+}
+
+.panel-toggle {
+  font-size: 0.8rem;
+  color: #6c757d;
+  transition: transform 0.2s;
+}
+
+.panel-content {
+  padding: 1rem;
 }
 </style>
