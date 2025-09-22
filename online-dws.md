@@ -11,7 +11,7 @@ Het beschrijft een web-based systeem dat vergelijkbare functionaliteit biedt als
 
 ### Is het nodig?
 
-Voor het bewerken van woordenboeken zoals ANW, WNW, Woordcombinaties en anderen gebruiken we op dit moment INL-DWS. Lexonomy wordt ook gebruikt, voor Vertaalwoordenschat. Beiden hebben nadelen, o.a. dat "tabelgebaseerde" bewerking niet mogelijk is; dit soort operaties worden gedaan door bijvoorbeeld naar Excel te exporteren en later de bewerkte lijst weer te importeren. Hierdoor gaat tijd verloren, voor taalkundigen en ontwikkelaars. Ook het maken van allerlei overzichten is niet zo eenvoudig en betekent werk voor ontwikkelaars.
+De DWS'en die we op dit moment gebruiken (INL-DWS en Lexonomy) hebben nadelen. Een van de belangrijkste wensen is "tabelgebaseerde" bewerking. Een eigenschap in veel artikelen bewerken wordt nu vaak gedaan door een Excel-lijst te exporteren en de bewerkte lijst weer te importeren. Als dit niet meer nodig is, spaart dit zowel taalkundigen als ontwikkelaars tijd.
 
 Er wordt wel eens gedacht over de mogelijkheid om woordenboeken zoals ANW om te zetten naar een relationele database. Met hun huidige rijke, geneste structuur wordt dit erg lastig. Dit zou namelijk een database met vele tientallen gekoppelde tabellen opleveren die niet efficient te bevragen en bewerken is.
 
@@ -22,7 +22,7 @@ Als we voor het tweede kiezen, hebben we dus een XML-bewerkingssysteem nodig waa
 
 ### Is het realiseerbaar?
 
-Het hier beschreven systeem bouwt op jarenlange ervaring met het bouwen en beheren van een DWS, en maakt gebruik van veel krachtige, populaire componenten die we vaak gebruikt hebben. Toch zal het maanden werk zijn om dit te realiseren.
+Het hier beschreven systeem bouwt op jarenlange ervaring en maakt gebruik van veel krachtige, populaire componenten die we eerder gebruikt hebben. Toch zal het maanden werk zijn om dit te realiseren.
 
 Waarschijnlijk is het nodig om met een of meerdere partners een projectaanvraag voor subsidie in te dienen. Zo'n projectaanvraag maakt waarschijnlijk meer kans als er al een prototype is dat de haalbaarheid aantoont en de voordelen boven andere systemen inzichtelijk maakt.
 
@@ -62,9 +62,7 @@ Het user interface is toegespitst op desktopgebruik. Gebruik via kleinere (touch
 
 ### User interface volgt uit het schema
 
-Het systeem ondersteunt in elk geval XML-Schema. De mogelijkheid om in de toekomst andere schematypes (Relax NG, Schematron, DTD) te ondersteunen houden we in het achterhoofd.
-
-100% support voor alle features van XML-Schema is niet voorzien. In elk geval zal TEI-Lex0 worden ondersteund, en de huidige schemata van ANW/WNW, NFW en Woordcombinaties. Als de gebruiker een schema probeert te gebruiken met niet-ondersteunde features, verschijnt een duidelijke foutmelding.
+Het systeem is gebaseerd op XML-Schema. In elk geval zal het TEI Lex-0 schema ondersteund worden, en de huidige schema's' van onze projecten. Als de gebruiker een schema probeert te gebruiken met niet-ondersteunde features, verschijnt een duidelijke foutmelding.
 
 Op basis van alleen het schema wordt een compleet user interface voor bewerking gegenereerd, inclusief het toevoegen/verwijderen van elementen, het verplaatsen van elementen, cut/copy/paste, validatiefunctie, etc.
 
@@ -165,12 +163,22 @@ Deze schermen zijn in elk geval nodig in het user interface:
 We kiezen zo veel mogelijk voor standaardtechnologieen waar we veel ervaring mee hebben:
 - **Vue.js** voor het frontend
 - **eXist-db** voor het opslaan van de XML documenten
+- **PostgreSQL** voor het opslaan van projectsettings, styling en plugins
 - **Saxon/SaxonJS** voor het parseren en valideren van (deel)entries
 - **CSS** voor styling van entries
 - **XPath** voor het verwijzen naar elementen voor bijv. styling, plugins, table-based bewerken, etc.
 - **Javascript** voor customization met plugins
 - **Java** voor de API (vanwege performance en Saxon)
 - **Docker** containers voor eXist-db en de API
+
+
+### XML Schema ondersteuning
+
+We valideren in elk geval aan de clientkant met SaxonJS. We gebruiken SaxonJS ook om te bepalen waar welke elementen toegevoegd mogen worden.
+
+Indien nodig kunnen we ook aan de serverkant valideren met de Java-versie van Saxon.
+
+We houden de mogelijkheid in gedachten dat we in de toekomst misschien ondersteuning voor andere schematypes willen toevoegen, zoals Relax NG of Schematron.
 
 
 ### Autosave, locking
@@ -231,7 +239,6 @@ Bijvoorbeeld:
 Het automatisch bijhouden van zulke metadata wordt (indien gewenst) geimplementeerd met een projectspecifieke plugin. Alleen de "onderdeelstatus" zal handmatig gezet moeten worden.
 
 Wanneer een entry gemaakt/gewijzigd is kunnen we vinden met [xmldb:created()](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/xmldb&location=java:org.exist.xquery.functions.xmldb.XMLDBModule#created.1) en [xmldb:last-modified()](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/xmldb&location=java:org.exist.xquery.functions.xmldb.XMLDBModule#last-modified.2).
-
 
 
 ### Plugins
