@@ -1,3 +1,6 @@
+# Ignore generated pdf
+online-dws.pdf
+
 # Docker
 .dockerignore
 

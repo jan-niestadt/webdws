@@ -32,6 +32,7 @@ Een mogelijke partner is de Fryske Akademy. Zij gebruiken nu al ons INL-DWS, en 
 ## Functionele eisen
 
 Core features:
+
 - web-based
 - XML schema bepaalt compleet default user interface; verdere customization is mogelijk
 - flexibele mogelijkheden om zowel *per woord* (entry-gebaseerd) als *per eigenschap(pen)* (table-gebaseerd) te werken
@@ -47,6 +48,7 @@ Core features:
 - backups van elk entry worden bijgehouden
 
 Would be nice:
+
 - goede support voor mixed content (bijv. voor eenvoudige opmaak zoals vet, cursief, super/subscript, etc.)
 - styling kan worden geconfigureerd, zodat de editor min of meer WYSIWYG is
 - gedetailleerde per-user rechten, bijv. read-only, of alleen (schrijf)toegang op bepaalde table-based views
@@ -77,7 +79,7 @@ Naast een user interface voor een hele entry (bijv. alle informatie over het woo
 
 Als een gebruiker bijvoorbeeld de definities van een groep gerelateerde entries in een tabel wil kunnen bewerken (dus zonder elk entry apart te hoeven openen), is dat een kwestie van een view configureren van wat er in de tabel weergegeven zou moeten worden.
 
-Meestal zal in een tabel-cel 1 widget komen, maar in principe moet elk stukje van een entry (een deel van het hele document) in een cel kunnen worden weergegeven en bewerkt.
+Meestal zal in een tabel-cel 1 tekst- of selectieveld komen, maar in principe moet elk stukje van een entry (een deel van het hele document) in een cel kunnen worden weergegeven en bewerkt.
 
 De table-based optie is ook zeer geschikt voor zoeken en het maken van allerlei overzichten, bijv. alle semagrammen met hun categorieen. Table-overzichten kunnen opgeslagen worden als TSV.
 
@@ -113,11 +115,9 @@ Om hier flexibel mee om te gaan, gebruikt het systeem intern altijd (persistent)
 
 ### Styling
 
-Eenvoudige styling kan geconfigureerd worden zodat de entry er overzichtelijk uitziet.
+Eenvoudige styling (kleuren, lettergrootte/type/styling, inspringing, list items, etc.) kan geconfigureerd worden zodat de entry er overzichtelijk uitziet.
 
-- WEL: kleuren, lettergrootte/type/styling, inspringing, list items, etc.
-- WOULD BE NICE: linked images. linked audio/video direct afspeelbaar (ws. via plugins)
-- NIET: complexere layout zoals tabbladen, kolommen, etc.
+Complexere layout zoals afbeeldingen, afspeelbare audio/video, tabbladen, kolommen, etc. zijn alleen via plugins te realiseren.
 
 
 ### Extensible met plugins
@@ -125,6 +125,7 @@ Eenvoudige styling kan geconfigureerd worden zodat de entry er overzichtelijk ui
 Het maken van een plugin is laagdrempelig en kan door een wat technischer gebruiker gedaan worden.
 
 Met behulp van plugins kan de werking van de editor worden aangepast, bijv.:
+
 - custom widgets
 - kruisverwijzingen
 - automatische acties, bijv. aanvullen van bepaalde informatie wanneer een veld ingevuld wordt, of automatisch gesorteerd houden van sommige elementen
@@ -146,12 +147,12 @@ Per project kan geconfigureerd worden welke metadata in de lemmalijst getoond mo
 ## Schermen in het user interface
 
 Deze schermen zijn in elk geval nodig in het user interface:
+
 - Inlogscherm
 - Projectenscherm
-- Formulier "Nieuw project"
 - Settings voor het project, inclusief styling en plugins
 - Entry-editor
-- Formulier "Tabelgebaseerde view maken"
+- Formulier "Tabelgebaseerde view maken/bewerken"
 - Tabelgebaseerde view (N.B. de "lemmalijst" is ook zo'n view)
 
 
@@ -161,15 +162,16 @@ Deze schermen zijn in elk geval nodig in het user interface:
 ### Basistechnologieen
 
 We kiezen zo veel mogelijk voor standaardtechnologieen waar we veel ervaring mee hebben:
+
 - **Vue.js** voor het frontend
-- **eXist-db** voor het opslaan van de XML documenten
+- **eXist-db** voor opslaan en efficiente querying van de XML documenten
 - **PostgreSQL** voor het opslaan van projectsettings, styling en plugins
 - **Saxon/SaxonJS** voor het parseren en valideren van (deel)entries
 - **CSS** voor styling van entries
 - **XPath** voor het verwijzen naar elementen voor bijv. styling, plugins, table-based bewerken, etc.
 - **Javascript** voor customization met plugins
 - **Java** voor de API (vanwege performance en Saxon)
-- **Docker** containers voor eXist-db en de API
+- **Docker** containers voor eXist-db, PostgreSQL en de API
 
 
 ### XML Schema ondersteuning
@@ -181,28 +183,28 @@ Indien nodig kunnen we ook aan de serverkant valideren met de Java-versie van Sa
 We houden de mogelijkheid in gedachten dat we in de toekomst misschien ondersteuning voor andere schematypes willen toevoegen, zoals Relax NG of Schematron.
 
 
-### Autosave, locking
+### Autosave
 
 Elke 60s wordt automatisch de entry opgeslagen op de server (als er iets veranderd is).
 
 
 ### Locking
 
-De editor stuurt elke 60s een signaal naar de server "deze gebruiker is dit entry nog steeds aan het bewerken". De server geeft de entry automatisch vrij als het 90s lang geen signaal ontvangen heeft. Dit zorgt dat een gebruiker de browser kan sluiten zonder dat de entry gelockt blijft.
+De editor stuurt elke 60s een signaal naar de server "deze gebruiker is dit entry nog steeds aan het bewerken". De server geeft de entry automatisch vrij als het 90s lang geen signaal ontvangen heeft. Dit zorgt dat een entry automatisch wordt vrijgegeven als een gebruiker het tabblad sluit.
 
 
 ### Table view
 
 Een per-table view kan geconfigureerd met:
 
-- een XPath die de "rows" van de table oplevert (bijv. `/entry[ends-with(lemma, 'tafel')]/sense`, alle betekenissen van lemma's die op `tafel` eindigen)
+- een XPath die de "rows" van de table oplevert (bijv. <nobr>`/entry[ends-with(lemma, 'tafel')]/sense`</nobr>, alle betekenissen van lemma's die op `tafel` eindigen)
 - een (relatieve) XPath per kolom (bijv. `./definition`) om de definitie in deze kolom weer te geven.
 
 Per-table views kunnen als read-only of editable gemarkeerd worden. Views kunnen als TSV gedownload worden.
 
-Per-table views kunnen erg groot worden, dus aan de clientkant houden we steeds maar 1 pagina in het geheugen. De XPath-expressies worden uitgevoerd op de eXist database (aan de serverkant dus). Bewerken van een cel gebeurt aan de client-kant (met dezelfde code waarmee een heel entry bewerkt kan worden). Opslaan van een gewijzigde cel gebeurt weer aan de serverkant.
+Per-table views kunnen erg groot worden, dus aan de clientkant houden we steeds maar 1 pagina in het geheugen. De XPath-expressies worden uitgevoerd op de database (aan de serverkant dus). Bewerken van een cel gebeurt aan de client-kant (met dezelfde code waarmee een heel entry bewerkt kan worden). Opslaan van een gewijzigde cel gebeurt weer aan de serverkant.
 
-eXist-db heeft voor elke node een intern id wat we naar de client kunnen meesturen. Als de gebruiker iets wijzigt, sturen we hetzelfde id terug naar de server zodat de node in eXist-db bijgewerkt kan worden. Op deze manier kunnen we efficient losse stukjes XML uit entries wijzigen. Locking hoeft alleen gedaan te worden tijdens het opslaan. (zie util:[absolute-resource-id](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/util&location=java:org.exist.xquery.functions.util.UtilModule#absolute-resource-id.1) / [util:get-resource-by-absolute-id](get-resource-by-absolute-id.1))
+eXist-db heeft voor elke node een intern id wat we naar de client kunnen meesturen. Als de gebruiker iets wijzigt, sturen we hetzelfde id terug naar de server zodat de node in eXist-db bijgewerkt kan worden. Op deze manier kunnen we efficient losse stukjes XML uit entries wijzigen. Locking hoeft alleen gedaan te worden tijdens het opslaan. (zie [`util:absolute-resource-id`](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/util&location=java:org.exist.xquery.functions.util.UtilModule#absolute-resource-id.1) / [`util:get-resource-by-absolute-id`](get-resource-by-absolute-id.1))
 
 De lemmalijst die in andere DWS'en te vinden is, is in feite ook een table view, dus daarvoor zal deze functionaliteit gebruikt kunnen worden.
 
@@ -221,11 +223,21 @@ Om XPaths op een grote database goed te laten werken, zullen we gebruikmaken van
 
 ### Flexibele "titel" van een entry
 
-Voor een project wordt met XPath een (als het goed is) unieke entry "titel" gedefinieerd. Bijvoorbeeld `concat(/entry/lemma, ' (', /entry/part-of-speech, ')')`.
+Voor een project wordt met XPath een (als het goed is) unieke entry "titel" gedefinieerd. Bijvoorbeeld:
 
-We kijken of het zoeken op basis van deze XPath (dus `concat(/entry/lemma, ' (', /entry/part-of-speech, ')') = 'bank (noun)'`) in eXist-db snel genoeg te krijgen is m.b.v. indexes.
+```xpath
+concat(/entry/lemma, ' (', /entry/part-of-speech, ')')
+```
 
-Mocht het niet snel genoeg zijn, dan zorgen we dat de titel apart opgeslagen wordt telkens als we een entry opslaan, zodat we hier direct in kunnen zoeken.
+We kijken of het zoeken op basis van deze XPath in eXist-db snel genoeg te krijgen is m.b.v. indexes. Dus iets als:
+
+```xpath
+starts-with(
+  concat(/entry/lemma, ' (', /entry/part-of-speech, ')'),
+  'bank')
+```
+
+Mocht dit niet snel genoeg zijn, dan zorgen we dat de titel apart opgeslagen wordt telkens als we een entry opslaan, zodat we hier direct in kunnen zoeken.
 
 
 ### Metadata
@@ -233,12 +245,13 @@ Mocht het niet snel genoeg zijn, dan zorgen we dat de titel apart opgeslagen wor
 Metadata wordt zo veel mogelijk in de entry-XML opgenomen.
 
 Bijvoorbeeld:
+
 - De status van een entry (in bewerking / naar redactie / online) wordt in de XML bijgehouden.
 - Per "blokje" (definitie/woordvorming/etymologie/etc.) wordt in de XML de status bijgehouden (in bewerking / afgerond), wanneer het onderwerp voor het laatst gewijzigd is, en evt. wie er aan gewerkt hebben.
 
 Het automatisch bijhouden van zulke metadata wordt (indien gewenst) geimplementeerd met een projectspecifieke plugin. Alleen de "onderdeelstatus" zal handmatig gezet moeten worden.
 
-Wanneer een entry gemaakt/gewijzigd is kunnen we vinden met [xmldb:created()](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/xmldb&location=java:org.exist.xquery.functions.xmldb.XMLDBModule#created.1) en [xmldb:last-modified()](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/xmldb&location=java:org.exist.xquery.functions.xmldb.XMLDBModule#last-modified.2).
+Wanneer een entry gemaakt/gewijzigd is kunnen we vinden met [`xmldb:created()`](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/xmldb&location=java:org.exist.xquery.functions.xmldb.XMLDBModule#created.1) en [`xmldb:last-modified()`](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/xmldb&location=java:org.exist.xquery.functions.xmldb.XMLDBModule#last-modified.2).
 
 
 ### Plugins
@@ -257,10 +270,12 @@ Om het pluginsysteem zo flexibel mogelijk te maken, is het waarschijnlijk versta
 ### Implementatieplan
 
 Proof of concept:
+
 - Basis entry-editor (nog zonder customization)
 - Table-based bewerking optie
 
 Verdere uitwerking:
+
 - Multi-project
 - Multi-user, locking, per-user rechten
 - Conflicterende edits voorkomen
@@ -275,7 +290,7 @@ Verdere uitwerking:
 
 ### XML opvragen met interne ids
 
-Hiermee kun je een XML document opvragen, waarbij elk element ook het interne exist-db id meekrijgt als attribuut. Hiermee kun je wijzigingen in het document efficient naar de server sturen (alleen de echte wijzigingen, niet telkens het hele document).
+Hiermee kun je een XML document opvragen, waarbij elk element ook het interne eXist-db id meekrijgt als attribuut. Hiermee kun je wijzigingen in het document efficient naar de server sturen (alleen de echte wijzigingen, niet telkens het hele document).
 
 ```xquery
 xquery version "3.1";
