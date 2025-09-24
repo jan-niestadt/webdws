@@ -166,7 +166,8 @@ We kiezen zo veel mogelijk voor standaardtechnologieen waar we veel ervaring mee
 - **Vue.js** voor het frontend
 - **eXist-db** voor opslaan en efficiente querying van de XML documenten
 - **PostgreSQL** voor het opslaan van projectsettings, styling en plugins
-- **Saxon/SaxonJS** voor het parseren en valideren van (deel)entries
+- **SaxonJS** (client-side) voor het uitvoeren van XPath 3.1 op (deel)entries
+- **Saxon** (server-side) voor het parsen van het XML-Schema
 - **CSS** voor styling van entries
 - **XPath** voor het verwijzen naar elementen voor bijv. styling, plugins, table-based bewerken, etc.
 - **Javascript** voor customization met plugins
@@ -176,9 +177,9 @@ We kiezen zo veel mogelijk voor standaardtechnologieen waar we veel ervaring mee
 
 ### XML Schema ondersteuning
 
-We valideren in elk geval aan de clientkant met SaxonJS. We gebruiken SaxonJS ook om te bepalen waar welke elementen toegevoegd mogen worden.
+Omdat Saxon-HE (de gratis versie) geen gedetailleerde toegang tot XML-Schema biedt, zullen we (net als in INL-DWS) waarschijnlijk zelf ons XML-Schema moeten parseren. We laden het dan in onze eigen datastructuur (die van INL-DWS, of iets dat erop geinspireerd is) en kunnen dat ook (ws. in een JSON-structuur) aan de client sturen, die daarmee kan valideren en de editorfunctionaliteit kan opbouwen.
 
-Indien nodig kunnen we ook aan de serverkant valideren met de Java-versie van Saxon.
+"Echt" valideren van Saxon-HE aan de serverkant is wel mogelijk. SaxonJS is niet schema-aware.
 
 We houden de mogelijkheid in gedachten dat we in de toekomst misschien ondersteuning voor andere schematypes willen toevoegen, zoals Relax NG of Schematron.
 
