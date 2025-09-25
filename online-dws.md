@@ -1,17 +1,19 @@
-# Web-based DWS FO/TO
+# WordLab, a web-based DWS
 
 ## Overzicht
 
 ### Inleiding
 
-Dit is een high-level functioneel en technisch ontwerp voor een nieuw dictionary writing system.
+Dit is een feasibility study danwel high-level functioneel en technisch ontwerp voor een nieuw dictionary writing system.
 
 Het beschrijft een web-based systeem dat vergelijkbare functionaliteit biedt als INL-DWS en Lexonomy, zonder de belangrijkste nadelen van die systemen, en met de mogelijkheid om "tabelgebaseerd" te bewerken.
 
 
 ### Is het nodig?
 
-De DWS'en die we op dit moment gebruiken (INL-DWS en Lexonomy) hebben nadelen. Een van de belangrijkste wensen is "tabelgebaseerde" bewerking. Een eigenschap in veel artikelen bewerken wordt nu vaak gedaan door een Excel-lijst te exporteren en de bewerkte lijst weer te importeren. Als dit niet meer nodig is, spaart dit zowel taalkundigen als ontwikkelaars tijd.
+De DWS'en die we op dit moment gebruiken (INL-DWS en Lexonomy) voldoen niet aan al onze wensen.
+
+Een van de belangrijkste wensen is "tabelgebaseerde" bewerking. Eén eigenschap (bijvoorbeeld woordvorming) bewerken in een hele lijst artikelen wordt nu ofwel gedaan door elk artikel afzonderlijk te openen, of door een Excel-lijst te exporteren en later de bewerkte lijst weer te importeren. Het zou zowel taalkundigen als ontwikkelaars tijd sparen als er een efficienter alternatief bestond.
 
 Er wordt wel eens gedacht over de mogelijkheid om woordenboeken zoals ANW om te zetten naar een relationele database. Met hun huidige rijke, geneste structuur wordt dit erg lastig. Dit zou namelijk een database met vele tientallen gekoppelde tabellen opleveren die niet efficient te bevragen en bewerken is.
 
@@ -35,7 +37,7 @@ Core features:
 
 - web-based
 - XML schema bepaalt compleet default user interface; verdere customization is mogelijk
-- flexibele mogelijkheden om zowel *per woord* (entry-gebaseerd) als *per eigenschap(pen)* (table-gebaseerd) te werken
+- flexibele mogelijkheden om zowel *per woord* (entry-gebaseerd) als *per eigenschap(pen)* (tabelgebaseerd) te werken
 - goede support voor kruisverwijzingen binnen het project en tussen projecten
 - flexibel omgaan met de unieke "ingang" van een entry. Lemma, lemma+homonymnummer, lemma+pos, etc.
 - meerdere entry-types (bijv. woord/idioom/formule in Woordcombinaties)
@@ -51,16 +53,16 @@ Would be nice:
 
 - goede support voor mixed content (bijv. voor eenvoudige opmaak zoals vet, cursief, super/subscript, etc.)
 - styling kan worden geconfigureerd, zodat de editor min of meer WYSIWYG is
-- gedetailleerde per-user rechten, bijv. read-only, of alleen (schrijf)toegang op bepaalde table-based views
+- gedetailleerde per-user rechten, bijv. read-only, of alleen (schrijf)toegang op bepaalde tabelgebaseerde views
 
 
 ### Web-based
 
 Het systeem heeft een web-based user interface, zodat het ook door externen gebruikt kan worden.
 
-Het user interface is toegespitst op desktopgebruik. Gebruik via kleinere (touch)screens is mogelijk maar niet het primaire doel.
-
 (vgl INL-DWS dat eigenlijk alleen intern of via telewerkserver kan worden uitgevoerd)
+
+Het user interface is toegespitst op desktopgebruik. Gebruik via kleinere (aanraak)schermen is mogelijk maar niet het primaire doel.
 
 ### User interface volgt uit het schema
 
@@ -73,26 +75,26 @@ De keuze voor bepaalde widgets die niet direct uit het schema volgen, of andere 
 (vgl Lexonomy waar vrij veel code nodig is om een bruikbare editor te maken)
 
 
-### Table-based optie
+### Tabelgebaseerd bewerken
 
-Naast een user interface voor een hele entry (bijv. alle informatie over het woord *waterval*) is het mogelijk om een table-based view te definieren.
+Naast een user interface voor een hele entry (bijv. alle informatie over het woord *waterval*) is het mogelijk om een tabel-view te definieren.
 
 Als een gebruiker bijvoorbeeld de definities van een groep gerelateerde entries in een tabel wil kunnen bewerken (dus zonder elk entry apart te hoeven openen), is dat een kwestie van een view configureren van wat er in de tabel weergegeven zou moeten worden.
 
 Meestal zal in een tabel-cel 1 tekst- of selectieveld komen, maar in principe moet elk stukje van een entry (een deel van het hele document) in een cel kunnen worden weergegeven en bewerkt.
 
-De table-based optie is ook zeer geschikt voor zoeken en het maken van allerlei overzichten, bijv. alle semagrammen met hun categorieen. Table-overzichten kunnen opgeslagen worden als TSV.
+De tabelgebaseerde optie is ook zeer geschikt voor zoeken en het maken van allerlei overzichten, bijv. alle semagrammen met hun categorieen. Tabel-overzichten kunnen opgeslagen worden als TSV.
 
-Het aanmaken van een nieuwe table-based view zou in het user interface te doen moeten zijn.
+Het aanmaken van een nieuwe tabel-view zou in het user interface te doen moeten zijn.
 
 
 ### Bruikbaar door meerdere gebruikers
 
 Meerdere gebruikers kunnen het systeem tegelijkertijd gebruiken. Als een gebruiker een entry opent, wordt het gelockt, zodat anderen niet hetzelfde entry kunnen bewerken.
 
-Meerdere gebruikers kunnen dezelfde gegevens in een table view open hebben. Als een van de twee een wijziging maakt, en daarna probeert de ander dezelfde gegevens te wijzigen, wordt dit conflict gedetecteerd en een foutmelding getoond. De kans hierop is in de praktijk uiteraard klein.
+Meerdere gebruikers kunnen dezelfde gegevens in een tabel-view open hebben. Als een van de twee een wijziging maakt, en daarna probeert de ander dezelfde gegevens te wijzigen, wordt dit conflict gedetecteerd en een foutmelding getoond. De kans hierop is in de praktijk uiteraard klein.
 
-Table views synchroniseren *niet* automatisch, dus als een andere gebruiker de gegevens wijzigt die in jouw table view getoond worden, zie je ze niet automatisch mee veranderen. Wel kun je de table view handmatig verversen om de nieuwste gegevens te zien.
+Tabel views synchroniseren *niet* automatisch, dus als een andere gebruiker de gegevens wijzigt die in jouw view getoond worden, zie je ze niet automatisch meeveranderen. Wel kun je de view handmatig verversen om de nieuwste gegevens te zien.
 
 
 ### Kruisverwijzingen
@@ -169,7 +171,7 @@ We kiezen zo veel mogelijk voor standaardtechnologieen waar we veel ervaring mee
 - **SaxonJS** (client-side) voor het uitvoeren van XPath 3.1 op (deel)entries
 - **Saxon** (server-side) voor het parsen van het XML-Schema
 - **CSS** voor styling van entries
-- **XPath** voor het verwijzen naar elementen voor bijv. styling, plugins, table-based bewerken, etc.
+- **XPath** voor het verwijzen naar elementen voor bijv. styling, plugins, tabelgebaseerd bewerken, etc.
 - **Javascript** voor customization met plugins
 - **Java** voor de API (vanwege performance en Saxon)
 - **Docker** containers voor eXist-db, PostgreSQL en de API
@@ -194,27 +196,27 @@ Elke 60s wordt automatisch de entry opgeslagen op de server (als er iets verande
 De editor stuurt elke 60s een signaal naar de server "deze gebruiker is dit entry nog steeds aan het bewerken". De server geeft de entry automatisch vrij als het 90s lang geen signaal ontvangen heeft. Dit zorgt dat een entry automatisch wordt vrijgegeven als een gebruiker het tabblad sluit.
 
 
-### Table view
+### Tabel view
 
-Een per-table view kan geconfigureerd met:
+Een per-tabel-view kan geconfigureerd met:
 
-- een XPath die de "rows" van de table oplevert (bijv. <nobr>`/entry[ends-with(lemma, 'tafel')]/sense`</nobr>, alle betekenissen van lemma's die op `tafel` eindigen)
+- een XPath die de "rows" van de tabel oplevert (bijv. <nobr>`/entry[ends-with(lemma, 'tafel')]/sense`</nobr>, alle betekenissen van lemma's die op `tafel` eindigen)
 - een (relatieve) XPath per kolom (bijv. `./definition`) om de definitie in deze kolom weer te geven.
 
-Per-table views kunnen als read-only of editable gemarkeerd worden. Views kunnen als TSV gedownload worden.
+Per-tabel views kunnen als read-only of editable gemarkeerd worden. Views kunnen als TSV gedownload worden.
 
-Per-table views kunnen erg groot worden, dus aan de clientkant houden we steeds maar 1 pagina in het geheugen. De XPath-expressies worden uitgevoerd op de database (aan de serverkant dus). Bewerken van een cel gebeurt aan de client-kant (met dezelfde code waarmee een heel entry bewerkt kan worden). Opslaan van een gewijzigde cel gebeurt weer aan de serverkant.
+Per-tabel views kunnen erg groot worden, dus aan de clientkant houden we steeds maar 1 pagina in het geheugen. De XPath-expressies worden uitgevoerd op de database (aan de serverkant dus). Bewerken van een cel gebeurt aan de client-kant (met dezelfde code waarmee een heel entry bewerkt kan worden). Opslaan van een gewijzigde cel gebeurt weer aan de serverkant.
 
 eXist-db heeft voor elke node een intern id wat we naar de client kunnen meesturen. Als de gebruiker iets wijzigt, sturen we hetzelfde id terug naar de server zodat de node in eXist-db bijgewerkt kan worden. Op deze manier kunnen we efficient losse stukjes XML uit entries wijzigen. Locking hoeft alleen gedaan te worden tijdens het opslaan. (zie [`util:absolute-resource-id`](https://exist-db.org/exist/apps/fundocs/view.html?uri=http://exist-db.org/xquery/util&location=java:org.exist.xquery.functions.util.UtilModule#absolute-resource-id.1) / [`util:get-resource-by-absolute-id`](get-resource-by-absolute-id.1))
 
-De lemmalijst die in andere DWS'en te vinden is, is in feite ook een table view, dus daarvoor zal deze functionaliteit gebruikt kunnen worden.
+De lemmalijst die in andere DWS'en te vinden is, is in feite ook een tabel-view, dus daarvoor zal deze functionaliteit gebruikt kunnen worden.
 
 Om erachter te komen met welk gedeelte in het XML Schema een XML fragment in de tabel overeenkomt, stuurt de server altijd het pad van het rootelement naar dit element mee. Hiermee moeten we het juiste element in het XML Schema kunnen bepalen.
 
 
 ### Voorkomen van conflicterende edits
 
-Om conflicterende edits te kunnen detecteren, houdt het backend bij welke entries/nodes wanneer gewijzigd zijn. De client houdt dit ook bij voor de nodes die in de table view getoond worden. Als een gebruiker een wijziging maakt, wordt gecontroleerd dat niemand anders in de tussentijd dit gedeelte van de entry gewijzigd heeft. Zo wel, dan wordt de laatste wijziging geannuleerd en krijgt de gebruiker een foutmelding te zien.
+Om conflicterende edits te kunnen detecteren, houdt het backend bij welke entries/nodes wanneer gewijzigd zijn. De client houdt dit ook bij voor de nodes die in de tabel-view getoond worden. Als een gebruiker een wijziging maakt, wordt gecontroleerd dat niemand anders in de tussentijd dit gedeelte van de entry gewijzigd heeft. Zo wel, dan wordt de laatste wijziging geannuleerd en krijgt de gebruiker een foutmelding te zien.
 
 
 ### XPath performance
@@ -273,7 +275,7 @@ Om het pluginsysteem zo flexibel mogelijk te maken, is het waarschijnlijk versta
 Proof of concept:
 
 - Basis entry-editor (nog zonder customization)
-- Table-based bewerking optie
+- tabelgebaseerde bewerking optie
 
 Verdere uitwerking:
 
