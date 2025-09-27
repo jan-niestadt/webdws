@@ -35,10 +35,9 @@ export interface ApiResponse<T> {
 // Frontend Tree Editor Data Structures
 export interface XmlNode {
   id: string;
-  type: 'element' | 'text' | 'comment' | 'cdata' | 'processing-instruction';
+  type: 'element' | 'text' | 'comment' | 'cdata' | 'processing-instruction' | 'attribute';
   name?: string;
   value?: string;
-  attributes?: { [key: string]: string };
   children: XmlNode[];
   parent?: string;
   expanded?: boolean;

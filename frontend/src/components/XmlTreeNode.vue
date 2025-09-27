@@ -34,8 +34,45 @@
         </span>
         
         <span class="node-name" v-if="node.type === 'element'">
-          &lt;{{ node.name }}{{ getAttributesString() }}{{ node.children.length === 0 ? ' /' : '' }}&gt;
+          &lt;{{ node.name }}{{ node.children.length === 0 ? ' /' : '' }}&gt;
         </span>
+        
+        <span 
+          v-else-if="node.type === 'attribute' && !isEditing" 
+          class="node-value editable"
+          @click.stop="startInlineEdit"
+          :title="getAttributeTitle()"
+        >
+          {{ node.name }}="{{ node.value }}"
+        </span>
+        
+        <div 
+          v-else-if="node.type === 'attribute' && isEditing"
+          class="attribute-edit"
+          @click.stop
+        >
+          <input 
+            v-model="editingName"
+            @blur="finishAttributeEdit"
+            @keydown.enter.prevent="finishAttributeEdit"
+            @keydown.escape.prevent="cancelInlineEdit"
+            class="attribute-name-input"
+            ref="nameInput"
+            placeholder="attribute name"
+            :title="'Press Enter to save, Escape to cancel'"
+          />
+          <span class="attribute-equals">=</span>
+          <input 
+            v-model="editingValue"
+            @blur="finishAttributeEdit"
+            @keydown.enter.prevent="finishAttributeEdit"
+            @keydown.escape.prevent="cancelInlineEdit"
+            class="attribute-value-input"
+            ref="valueInput"
+            placeholder="attribute value"
+            :title="'Press Enter to save, Escape to cancel'"
+          />
+        </div>
         
         <span 
           v-else-if="node.type === 'text' && !isEditing" 
@@ -137,7 +174,10 @@ const emit = defineEmits<{
 // Reactive state for inline editing
 const isEditing = ref(false);
 const editingValue = ref('');
+const editingName = ref('');
 const editInput = ref<HTMLInputElement | null>(null);
+const nameInput = ref<HTMLInputElement | null>(null);
+const valueInput = ref<HTMLInputElement | null>(null);
 
 // Watch for external changes to node value
 watch(() => props.node.value, (newValue) => {
@@ -173,32 +213,37 @@ const getNodeIcon = (type: XmlNode['type']): string => {
       return '📋';
     case 'processing-instruction':
       return '⚙️';
+    case 'attribute':
+      return '🏷️';
     default:
       return '❓';
   }
 };
 
-const getAttributesString = (): string => {
-  if (!props.node.attributes || Object.keys(props.node.attributes).length === 0) {
-    return '';
+const getAttributeTitle = (): string => {
+  if (props.node.type === 'attribute') {
+    return `Click to edit: ${props.node.name}="${props.node.value}"`;
   }
-  
-  return ' ' + Object.entries(props.node.attributes)
-    .map(([key, value]) => `${key}="${value}"`)
-    .join(' ');
+  return '';
 };
+
 
 // Inline editing methods
 const startInlineEdit = async () => {
-  if (!['text', 'comment', 'cdata'].includes(props.node.type)) return;
+  if (!['text', 'comment', 'cdata', 'attribute'].includes(props.node.type)) return;
   
   isEditing.value = true;
   editingValue.value = props.node.value || '';
   
+  if (props.node.type === 'attribute') {
+    editingName.value = props.node.name || '';
+  }
+  
   await nextTick();
-  if (editInput.value) {
-    editInput.value.focus();
-    editInput.value.select();
+  const inputToFocus = props.node.type === 'attribute' ? nameInput.value : editInput.value;
+  if (inputToFocus) {
+    inputToFocus.focus();
+    inputToFocus.select();
   }
 };
 
@@ -218,9 +263,29 @@ const finishInlineEdit = () => {
   editingValue.value = '';
 };
 
+const finishAttributeEdit = () => {
+  if (!isEditing.value || props.node.type !== 'attribute') return;
+  
+  const newName = editingName.value.trim();
+  const newValue = editingValue.value.trim();
+  
+  if (newName !== props.node.name || newValue !== props.node.value) {
+    emit('edit', {
+      nodeId: props.node.id,
+      field: 'attribute',
+      value: { name: newName, value: newValue }
+    });
+  }
+  
+  isEditing.value = false;
+  editingName.value = '';
+  editingValue.value = '';
+};
+
 const cancelInlineEdit = () => {
   isEditing.value = false;
   editingValue.value = '';
+  editingName.value = '';
 };
 </script>
 
@@ -321,6 +386,42 @@ const cancelInlineEdit = () => {
 
 .node-value-input:focus {
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.attribute-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8f9fa;
+  border: 2px solid #3498db;
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
+.attribute-name-input,
+.attribute-value-input {
+  background: transparent;
+  border: none;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  color: #2c3e50;
+  outline: none;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.attribute-name-input {
+  min-width: 80px;
+  font-weight: bold;
+}
+
+.attribute-value-input {
+  min-width: 100px;
+}
+
+.attribute-equals {
+  color: #6c757d;
+  font-weight: bold;
 }
 
 .node-children {

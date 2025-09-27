@@ -72,6 +72,14 @@
           Add Comment
         </button>
         <button 
+          @click="addAttribute" 
+          class="btn btn-sm" 
+          :disabled="!selectedNode || selectedNode.type !== 'element'"
+          :title="!selectedNode ? 'Select a node first' : selectedNode.type !== 'element' ? 'Only element nodes can have attributes' : 'Add attribute'"
+        >
+          Add Attribute
+        </button>
+        <button 
           @click="deleteNode" 
           class="btn btn-sm btn-danger" 
           :disabled="!selectedNode || isRoot"
@@ -115,67 +123,6 @@
       </div>
     </div>
 
-    <!-- Node Properties Panel -->
-    <div v-if="selectedNode && editingNode" class="collapsible-panel">
-      <div class="panel-header" @click="showPropertiesPanel = !showPropertiesPanel">
-        <h4>Node Properties</h4>
-        <span class="panel-toggle">{{ showPropertiesPanel ? '▼' : '▶' }}</span>
-      </div>
-      <div v-if="showPropertiesPanel" class="panel-content">
-        <div class="property-group">
-          <label>Type:</label>
-          <span class="node-type">{{ selectedNode.type }}</span>
-        </div>
-        
-        <div v-if="selectedNode.type === 'element'" class="property-group">
-          <label>Name:</label>
-          <input 
-            v-model="editingNode.name" 
-            @blur="updateNode"
-            class="property-input"
-          />
-        </div>
-        
-        <div v-if="selectedNode.type === 'text' || selectedNode.type === 'comment'" class="property-group">
-          <label>Value:</label>
-          <textarea 
-            v-model="editingNode.value" 
-            @blur="updateNode"
-            class="property-textarea"
-            rows="3"
-          ></textarea>
-        </div>
-        
-        <div v-if="selectedNode.type === 'element'" class="property-group">
-          <label>Attributes:</label>
-          <div class="attributes-list">
-            <div 
-              v-for="(_, key) in selectedNode.attributes" 
-              :key="key"
-              class="attribute-item"
-            >
-              <input 
-                v-model="editingAttributeKeys[key as string]" 
-                @blur="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
-                @keyup.enter="updateAttributeKey(key as string, editingAttributeKeys[key as string])"
-                :class="['attribute-key', { 'invalid': !isValidAttributeName(editingAttributeKeys[key as string]) }]"
-                placeholder="Attribute name"
-                title="Attribute names must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens"
-              />
-              <input 
-                v-model="selectedNode.attributes![key as string]" 
-                @blur="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
-                @keyup.enter="updateAttributeValue(key as string, selectedNode.attributes![key as string])"
-                class="attribute-value"
-                placeholder="Attribute value"
-              />
-              <button @click="removeAttribute(key as string)" class="btn-remove-attr" title="Remove attribute">×</button>
-            </div>
-            <button @click="addAttribute" class="btn btn-sm">Add Attribute</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
   </div>
 </template>
@@ -210,11 +157,7 @@ const treeState = ref<XmlTreeState>({
 
 
 // Panel visibility state
-const showPropertiesPanel = ref(true);
 const showXPathPanel = ref(false);
-
-const editingNode = ref<XmlNode | null>(null);
-const editingAttributeKeys = ref<{ [key: string]: string }>({});
 
 // Element dropdown state
 const showElementDropdown = ref(false);
@@ -281,12 +224,19 @@ const domNodeToXmlNode = (domNode: Node, parentId?: string): XmlNode => {
   if (domNode.nodeType === Node.ELEMENT_NODE) {
     const element = domNode as Element;
     node.name = element.tagName;
-    node.attributes = {};
     
-    // Copy attributes
+    // Convert attributes to attribute nodes
     for (let i = 0; i < element.attributes.length; i++) {
       const attr = element.attributes[i];
-      node.attributes[attr.name] = attr.value;
+      const attributeNode: XmlNode = {
+        id: generateId(),
+        type: 'attribute',
+        name: attr.name,
+        value: attr.value,
+        children: [],
+        parent: id
+      };
+      node.children.push(attributeNode);
     }
   } else if (domNode.nodeType === Node.TEXT_NODE || domNode.nodeType === Node.CDATA_SECTION_NODE) {
     node.value = domNode.textContent || '';
@@ -349,31 +299,37 @@ const treeToXml = (node: XmlNode, indent: number = 0): string => {
   if (node.type === 'element') {
     let xml = `${indentStr}<${node.name}`;
     
-    // Add attributes
-    if (node.attributes) {
-      for (const [key, value] of Object.entries(node.attributes)) {
-        xml += ` ${key}="${value}"`;
+    // Add attributes from attribute nodes only
+    
+    // Add attributes from attribute nodes
+    const attributeNodes = node.children.filter(child => child.type === 'attribute');
+    for (const attrNode of attributeNodes) {
+      if (attrNode.name && attrNode.value !== undefined) {
+        xml += ` ${attrNode.name}="${attrNode.value}"`;
       }
     }
     
-    if (node.children.length === 0) {
+    // Filter out attribute nodes from children for content processing
+    const contentChildren = node.children.filter(child => child.type !== 'attribute');
+    
+    if (contentChildren.length === 0) {
       xml += ' />';
     } else {
       xml += '>';
       
       // Check if all children are text nodes (for inline formatting)
-      const allTextChildren = node.children.every(child => child.type === 'text');
+      const allTextChildren = contentChildren.every(child => child.type === 'text');
       
       if (allTextChildren) {
         // Inline formatting for text content
-        for (const child of node.children) {
+        for (const child of contentChildren) {
           xml += treeToXml(child, 0);
         }
         xml += `</${node.name}>`;
       } else {
         // Multi-line formatting for mixed content
         xml += '\n';
-        for (const child of node.children) {
+        for (const child of contentChildren) {
           xml += treeToXml(child, indent + 1);
         }
         xml += `${indentStr}</${node.name}>`;
@@ -389,27 +345,15 @@ const treeToXml = (node: XmlNode, indent: number = 0): string => {
   } else if (node.type === 'cdata') {
     const result = `${indentStr}<![CDATA[${node.value}]]>`;
     return result;
+  } else if (node.type === 'attribute') {
+    // Attribute nodes are handled in their parent element, not as standalone nodes
+    return '';
   }
   return '';
 };
 
 const selectNode = (nodeId: string) => {
   treeState.value.selectedNodeId = nodeId;
-  const node = findNodeById(treeState.value.root!, nodeId);
-  if (node) {
-    editingNode.value = { ...node };
-    // Initialize editingAttributeKeys with the actual attribute keys, not values
-    editingAttributeKeys.value = {};
-    if (node.attributes) {
-      Object.keys(node.attributes).forEach(key => {
-        editingAttributeKeys.value[key] = key;
-      });
-    } else if (node.type === 'element') {
-      // Initialize empty attributes object for element nodes
-      node.attributes = {};
-    }
-  }
-  
 };
 
 const toggleNode = (nodeId: string) => {
@@ -426,20 +370,25 @@ const editNode = (editData: { nodeId: string; field: string; value: any }) => {
     return;
   }
   
-  
   if (field === 'remove') {
     // Remove the node (for empty text nodes)
     removeNode(nodeId);
+  } else if (field === 'attribute') {
+    // Handle attribute editing
+    if (node.type === 'attribute') {
+      node.name = value.name;
+      node.value = value.value;
+    }
   } else {
     // Update the node property
     (node as any)[field] = value;
-    
-    // Force reactivity update
-    treeState.value = { ...treeState.value };
-    
-    // Only call markModified - the watcher will handle emitXmlContent
-    markModified();
   }
+  
+  // Force reactivity update
+  treeState.value = { ...treeState.value };
+  
+  // Only call markModified - the watcher will handle emitXmlContent
+  markModified();
 };
 
 const addChildNode = (parentId: string, newNode: XmlNode) => {
@@ -450,6 +399,7 @@ const addChildNode = (parentId: string, newNode: XmlNode) => {
     markModified();
   }
 };
+
 
 const addElement = () => {
   if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
@@ -465,7 +415,6 @@ const addElement = () => {
       type: 'element',
       name: elementName,
       children: [],
-      attributes: {},
       parent: selectedNode.value.id
     };
     addChildNode(selectedNode.value.id, newElement);
@@ -511,6 +460,22 @@ const addComment = () => {
   selectNode(newComment.id);
 };
 
+const addAttribute = () => {
+  if (!selectedNode.value || selectedNode.value.type !== 'element') return;
+  
+  const newAttribute: XmlNode = {
+    id: generateId(),
+    type: 'attribute',
+    name: 'newAttribute',
+    value: '',
+    children: [],
+    parent: selectedNode.value.id
+  };
+  
+  addChildNode(selectedNode.value.id, newAttribute);
+  selectNode(newAttribute.id);
+};
+
 const removeNode = (nodeId: string) => {
   const node = findNodeById(treeState.value.root!, nodeId);
   if (!node || node === treeState.value.root) return;
@@ -529,97 +494,10 @@ const deleteNode = () => {
   if (!selectedNode.value || isRoot.value) return;
   
   removeNode(selectedNode.value.id);
-  editingNode.value = null;
 };
 
-const updateNode = () => {
-  if (!selectedNode.value || !editingNode.value) return;
-  
-  // For text nodes, don't allow whitespace-only values
-  if (selectedNode.value.type === 'text' && 
-      typeof editingNode.value.value === 'string' && 
-      editingNode.value.value.trim() === '') {
-    // Remove whitespace-only text nodes
-    removeNode(selectedNode.value.id);
-    return;
-  }
-  
-  Object.assign(selectedNode.value, editingNode.value);
-  markModified();
-};
 
-const updateAttributeKey = (oldKey: string, newKey: string) => {
-  if (!selectedNode.value || !selectedNode.value.attributes) return;
-  
-  if (newKey !== oldKey && newKey.trim() !== '') {
-    // Validate attribute name (XML attribute names must start with letter or underscore)
-    if (!/^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(newKey)) {
-      // Invalid attribute name, revert to original
-      editingAttributeKeys.value[oldKey] = oldKey;
-      return;
-    }
-    
-    // Check if the new key already exists
-    if (selectedNode.value.attributes.hasOwnProperty(newKey)) {
-      // If the new key already exists, don't update to avoid conflicts
-      editingAttributeKeys.value[oldKey] = oldKey; // Revert the display
-      return;
-    }
-    
-    const value = selectedNode.value.attributes[oldKey];
-    delete selectedNode.value.attributes[oldKey];
-    selectedNode.value.attributes[newKey] = value;
-    
-    // Update the editing keys mapping
-    delete editingAttributeKeys.value[oldKey];
-    editingAttributeKeys.value[newKey] = newKey;
-    
-    markModified();
-  } else if (newKey.trim() === '') {
-    // If the key is empty, revert to the original key
-    editingAttributeKeys.value[oldKey] = oldKey;
-  }
-};
 
-const updateAttributeValue = (key: string, value: string) => {
-  if (!selectedNode.value || !selectedNode.value.attributes) return;
-  
-  selectedNode.value.attributes[key] = value;
-  markModified();
-};
-
-const removeAttribute = (key: string) => {
-  if (!selectedNode.value || !selectedNode.value.attributes) return;
-  
-  delete selectedNode.value.attributes[key];
-  delete editingAttributeKeys.value[key];
-  markModified();
-};
-
-const addAttribute = () => {
-  if (!selectedNode.value) return;
-  
-  if (!selectedNode.value.attributes) {
-    selectedNode.value.attributes = {};
-  }
-  
-  // Generate a unique key for the new attribute
-  let counter = 1;
-  let newKey = 'newAttribute';
-  while (selectedNode.value.attributes.hasOwnProperty(newKey)) {
-    newKey = `newAttribute${counter}`;
-    counter++;
-  }
-  
-  selectedNode.value.attributes[newKey] = '';
-  editingAttributeKeys.value[newKey] = newKey;
-  markModified();
-};
-
-const isValidAttributeName = (name: string): boolean => {
-  if (!name || name.trim() === '') return true; // Allow empty names during editing
-  return /^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(name);
-};
 
 const expandAll = () => {
   const expandNode = (node: XmlNode) => {
@@ -779,15 +657,22 @@ const addSelectedElement = (element: SchemaElement) => {
     type: 'element',
     name: element.name,
     children: [],
-    attributes: {},
     parent: selectedNode.value.id
   };
   
-  // Add required attributes automatically
+  // Add required attributes automatically as attribute nodes
   if (element.attributes) {
     for (const attr of element.attributes) {
       if (attr.use === 'required') {
-        newElement.attributes![attr.name] = getDefaultAttributeValue(attr);
+        const attributeNode: XmlNode = {
+          id: generateId(),
+          type: 'attribute',
+          name: attr.name,
+          value: getDefaultAttributeValue(attr),
+          children: [],
+          parent: newElement.id
+        };
+        newElement.children.push(attributeNode);
       }
     }
   }
@@ -801,15 +686,22 @@ const addSelectedElement = (element: SchemaElement) => {
           type: 'element',
           name: childElement.name,
           children: [],
-          attributes: {},
           parent: newElement.id
         };
         
-        // Add required attributes to child elements
+        // Add required attributes to child elements as attribute nodes
         if (childElement.attributes) {
           for (const attr of childElement.attributes) {
             if (attr.use === 'required') {
-              requiredChild.attributes![attr.name] = getDefaultAttributeValue(attr);
+              const attributeNode: XmlNode = {
+                id: generateId(),
+                type: 'attribute',
+                name: attr.name,
+                value: getDefaultAttributeValue(attr),
+                children: [],
+                parent: requiredChild.id
+              };
+              requiredChild.children.push(attributeNode);
             }
           }
         }
