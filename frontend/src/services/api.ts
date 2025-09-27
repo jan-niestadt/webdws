@@ -10,7 +10,38 @@
 import axios from 'axios';
 import type { XmlDocument, XmlDocumentList, SaveXmlRequest, ApiResponse } from '@/types/xml';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+// Schema types
+export interface SchemaElement {
+  name: string;
+  namespace?: string;
+  type: string;
+  baseType?: string;
+  minOccurs: number;
+  maxOccurs: string;
+  children?: SchemaElement[];
+  attributes?: SchemaAttribute[];
+  properties?: Record<string, any>;
+}
+
+export interface SchemaAttribute {
+  name: string;
+  namespace?: string;
+  type: string;
+  use: string;
+  defaultValue?: string;
+  fixedValue?: string;
+}
+
+export interface SchemaInfo {
+  targetNamespace?: string;
+  elementFormDefault?: string;
+  attributeFormDefault?: string;
+  elements: SchemaElement[];
+  schemaLocation?: string;
+  version?: string;
+}
+
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -78,5 +109,25 @@ export const xmlApi = {
     } catch (error) {
       return { valid: false, error: 'Network error during validation' };
     }
+  }
+};
+
+export const schemaApi = {
+  // Get the default XML schema (library.xsd)
+  async getDefaultSchema(): Promise<SchemaInfo> {
+    const response = await api.get<ApiResponse<SchemaInfo>>('/api/schema/default');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to fetch default schema');
+  },
+
+  // Load a specific XML schema by path
+  async loadSchema(path: string): Promise<SchemaInfo> {
+    const response = await api.get<ApiResponse<SchemaInfo>>(`/api/schema/load?path=${encodeURIComponent(path)}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to load schema');
   }
 };
