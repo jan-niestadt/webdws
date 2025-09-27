@@ -165,6 +165,7 @@ import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
 import { xmlService } from '@/services/xmlService';
 import type { SchemaInfo, SchemaElement, SchemaAttribute } from '@/services/api';
+import { getDefaultAttributeValue, getDefaultTextContent } from '@/utils/defaultValues';
 
 // Props
 const props = defineProps<{
@@ -768,43 +769,6 @@ const countChildElements = (parentNode: XmlNode, elementName: string): number =>
   ).length;
 };
 
-const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
-  // Use default value if specified in schema
-  if (attr.defaultValue) {
-    return attr.defaultValue;
-  }
-  
-  // Use fixed value if specified in schema
-  if (attr.fixedValue) {
-    return attr.fixedValue;
-  }
-  
-  // Generate type-based defaults
-  const type = attr.type.toLowerCase();
-  
-  if (type.includes('boolean')) {
-    return 'false';
-  }
-  
-  if (type.includes('int') && !type.includes('string')) {
-    return '0';
-  }
-  
-  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
-    return '0';
-  }
-  
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  // For strings and other types, return empty string
-  return '';
-};
 
 const hasRequiredContent = (element: SchemaElement): boolean => {
   // Check for required attributes
@@ -880,44 +844,6 @@ const hideAttributeDropdown = () => {
   allowedAttributes.value = [];
 };
 
-const getDefaultTextContent = (element: SchemaElement): string => {
-  // Use default value if specified in schema
-  if (element.defaultValue) {
-    return element.defaultValue;
-  }
-  
-  // Use fixed value if specified in schema
-  if (element.fixedValue) {
-    return element.fixedValue;
-  }
-  
-  // Generate type-based defaults for text content
-  const type = element.type.toLowerCase();
-  
-  if (type.includes('boolean')) {
-    return 'false';
-  }
-  
-  if (type.includes('int') && !type.includes('string')) {
-    return '0';
-  }
-  
-  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
-    return '0';
-  }
-  
-  // For date fields, provide type-based defaults only if no schema default
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  // For strings and other types, return empty string
-  return '';
-};
 
 // Unified function to create a complete element with all required content
 const createElementWithRequiredContent = (schemaElement: SchemaElement, parentId: string): XmlNode => {

@@ -111,6 +111,7 @@ import { xmlApi, schemaApi } from '@/services/api';
 import type { XmlDocument, SaveXmlRequest, XmlNode } from '@/types/xml';
 import type { SchemaInfo, SchemaElement } from '@/services/api';
 import { xmlService } from '@/services/xmlService';
+import { getDefaultAttributeValue, getDefaultTextContent } from '@/utils/defaultValues';
 import * as monaco from 'monaco-editor';
 import XmlTreeEditor from '@/components/XmlTreeEditor.vue';
 
@@ -349,82 +350,6 @@ const generateId = (): string => {
   return Math.random().toString(36).substr(2, 9);
 };
 
-const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
-  // Use default value if specified in schema
-  if (attr.defaultValue) {
-    return attr.defaultValue;
-  }
-  
-  // Use fixed value if specified in schema
-  if (attr.fixedValue) {
-    return attr.fixedValue;
-  }
-  
-  // Generate type-based defaults
-  const type = attr.type.toLowerCase();
-  
-  if (type.includes('boolean')) {
-    return 'false';
-  }
-  
-  if (type.includes('int') && !type.includes('string')) {
-    return '0';
-  }
-  
-  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
-    return '0';
-  }
-  
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  // For other types, return empty string
-  return '';
-};
-
-const getDefaultTextContent = (element: SchemaElement): string => {
-  // Use default value if specified in schema
-  if (element.defaultValue) {
-    return element.defaultValue;
-  }
-  
-  // Use fixed value if specified in schema
-  if (element.fixedValue) {
-    return element.fixedValue;
-  }
-  
-  // Generate type-based defaults for text content
-  const type = element.type.toLowerCase();
-  
-  if (type.includes('boolean')) {
-    return 'false';
-  }
-  
-  if (type.includes('int') && !type.includes('string')) {
-    return '0';
-  }
-  
-  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
-    return '0';
-  }
-  
-  // For date fields, provide type-based defaults only if no schema default
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  // For other types, return empty string
-  return '';
-};
 
 const createElementWithRequiredContent = (schemaElement: SchemaElement, parentId: string): XmlNode => {
   const element: XmlNode = {
