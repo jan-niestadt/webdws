@@ -34,10 +34,14 @@
                 <span class="element-name">{{ element.name }}</span>
                 <span v-if="element.minOccurs > 0" class="required-indicator">*</span>
                 <span class="current-count">({{ countChildElements(selectedNode!, element.name) }}/{{ element.maxOccurs === 'unbounded' ? '∞' : element.maxOccurs }})</span>
+                <span v-if="hasRequiredContent(element)" class="auto-create-indicator">⚡</span>
               </div>
               <div class="element-details">
                 <span class="element-type">{{ element.type }}</span>
                 <span class="occurrence-info">{{ element.minOccurs }}..{{ element.maxOccurs }}</span>
+              </div>
+              <div v-if="hasRequiredContent(element)" class="auto-create-info">
+                <span class="auto-create-text">Auto-creates required content</span>
               </div>
             </div>
             <div v-if="allowedChildElements.length === 0" class="dropdown-item disabled">
@@ -461,22 +465,14 @@ const addElement = () => {
       type: 'element',
       name: elementName,
       children: [],
+      attributes: {},
       parent: selectedNode.value.id
     };
     addChildNode(selectedNode.value.id, newElement);
     selectNode(newElement.id);
   } else if (allowedElements.length === 1) {
-    // Only one allowed element, use it directly
-    const elementName = allowedElements[0].name;
-    const newElement: XmlNode = {
-      id: generateId(),
-      type: 'element',
-      name: elementName,
-      children: [],
-      parent: selectedNode.value.id
-    };
-    addChildNode(selectedNode.value.id, newElement);
-    selectNode(newElement.id);
+    // Only one allowed element, use it directly with auto-creation
+    addSelectedElement(allowedElements[0]);
   } else if (allowedElements.length > 1) {
     // Multiple allowed elements, show dropdown
     allowedChildElements.value = allowedElements;
@@ -783,8 +779,58 @@ const addSelectedElement = (element: SchemaElement) => {
     type: 'element',
     name: element.name,
     children: [],
+    attributes: {},
     parent: selectedNode.value.id
   };
+  
+  // Add required attributes automatically
+  if (element.attributes) {
+    for (const attr of element.attributes) {
+      if (attr.use === 'required') {
+        newElement.attributes![attr.name] = getDefaultAttributeValue(attr);
+      }
+    }
+  }
+  
+  // Add required child elements automatically
+  if (element.children) {
+    for (const childElement of element.children) {
+      if (childElement.minOccurs > 0) {
+        const requiredChild: XmlNode = {
+          id: generateId(),
+          type: 'element',
+          name: childElement.name,
+          children: [],
+          attributes: {},
+          parent: newElement.id
+        };
+        
+        // Add required attributes to child elements
+        if (childElement.attributes) {
+          for (const attr of childElement.attributes) {
+            if (attr.use === 'required') {
+              requiredChild.attributes![attr.name] = getDefaultAttributeValue(attr);
+            }
+          }
+        }
+        
+        // Add default text content for elements that typically need it
+        const defaultText = getDefaultTextContent(childElement);
+        if (defaultText) {
+          const textNode: XmlNode = {
+            id: generateId(),
+            type: 'text',
+            value: defaultText,
+            children: [],
+            parent: requiredChild.id
+          };
+          requiredChild.children.push(textNode);
+        }
+        
+        newElement.children.push(requiredChild);
+      }
+    }
+  }
   
   addChildNode(selectedNode.value.id, newElement);
   selectNode(newElement.id);
@@ -802,6 +848,117 @@ const countChildElements = (parentNode: XmlNode, elementName: string): number =>
   return parentNode.children.filter(child => 
     child.type === 'element' && child.name === elementName
   ).length;
+};
+
+const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
+  // Use default value if specified
+  if (attr.defaultValue) {
+    return attr.defaultValue;
+  }
+  
+  // Use fixed value if specified
+  if (attr.fixedValue) {
+    return attr.fixedValue;
+  }
+  
+  // Generate sensible defaults based on type
+  const type = attr.type.toLowerCase();
+  
+  if (type.includes('id')) {
+    return `id_${Date.now()}`;
+  }
+  
+  if (type.includes('boolean')) {
+    return 'false';
+  }
+  
+  if (type.includes('date') || type.includes('time')) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  if (type.includes('number') || type.includes('int') || type.includes('decimal')) {
+    return '0';
+  }
+  
+  if (type.includes('string')) {
+    return '';
+  }
+  
+  // Default fallback
+  return '';
+};
+
+const hasRequiredContent = (element: SchemaElement): boolean => {
+  // Check for required attributes
+  if (element.attributes) {
+    const hasRequiredAttrs = element.attributes.some(attr => attr.use === 'required');
+    if (hasRequiredAttrs) return true;
+  }
+  
+  // Check for required child elements
+  if (element.children) {
+    const hasRequiredChildren = element.children.some(child => child.minOccurs > 0);
+    if (hasRequiredChildren) return true;
+  }
+  
+  return false;
+};
+
+const getDefaultTextContent = (element: SchemaElement): string => {
+  const name = element.name.toLowerCase();
+  const type = element.type.toLowerCase();
+  
+  // Generate sensible defaults based on element name and type
+  if (name.includes('title')) {
+    return 'Untitled';
+  }
+  
+  if (name.includes('author')) {
+    return 'Unknown Author';
+  }
+  
+  if (name.includes('description')) {
+    return 'No description available';
+  }
+  
+  if (name.includes('name')) {
+    return 'Unnamed';
+  }
+  
+  if (name.includes('isbn')) {
+    return '000-0-000-00000-0';
+  }
+  
+  if (name.includes('genre')) {
+    return 'Unknown';
+  }
+  
+  if (name.includes('published') && type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
+  
+  if (name.includes('id') || name.includes('identifier')) {
+    return `id_${Date.now()}`;
+  }
+  
+  if (type.includes('string') && !name.includes('id')) {
+    return ''; // Empty string for generic string elements
+  }
+  
+  if (type.includes('boolean')) {
+    return 'false';
+  }
+  
+  if (type.includes('number') || type.includes('int') || type.includes('decimal')) {
+    return '0';
+  }
+  
+  if (type.includes('date')) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  // No default text content
+  return '';
 };
 
 // Click outside handler to close dropdown
@@ -954,6 +1111,24 @@ onUnmounted(() => {
   color: #6c757d;
   font-family: monospace;
   margin-left: 0.5rem;
+}
+
+.auto-create-indicator {
+  font-size: 0.8rem;
+  color: #28a745;
+  margin-left: 0.5rem;
+  font-weight: bold;
+}
+
+.auto-create-info {
+  margin-top: 0.25rem;
+  padding-left: 1rem;
+}
+
+.auto-create-text {
+  font-size: 0.7rem;
+  color: #28a745;
+  font-style: italic;
 }
 
 .tree-container {
