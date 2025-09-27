@@ -131,7 +131,7 @@ const editorContainer = ref<HTMLElement>();
 const treeEditorRef = ref<InstanceType<typeof XmlTreeEditor>>();
 
 // Initialize Monaco Editor
-const initEditor = async () => {
+const initEditor = () => {
   if (!editorContainer.value) return;
 
   console.log('initEditor called with mode:', editorMode.value);
@@ -378,7 +378,6 @@ const setMode = async (mode: 'text' | 'tree') => {
     
     // Reinitialize the editor with formatted content (read-only)
     console.log('Initializing XML view with content:', xmlContent.value.substring(0, 100) + '...');
-    await initEditor();
   } else {
     // Switching to tree mode - dispose and recreate editor to ensure clean state
     if (editor) {
@@ -392,8 +391,8 @@ const setMode = async (mode: 'text' | 'tree') => {
     // Wait for DOM update and recreate editor in tree mode
     console.log('Initializing tree editor with content:', xmlContent.value.substring(0, 100) + '...');
     await nextTick();
-    await initEditor();
   }
+  initEditor();
 };
 
 // Handle tree modifications
@@ -415,7 +414,7 @@ const handleXmlChanged = (newContent: string) => {
 // Lifecycle
 onMounted(async () => {
   await nextTick();
-  await initEditor();
+  initEditor();
   newDocument(); // Start with a new document
 });
 
