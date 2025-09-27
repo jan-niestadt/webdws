@@ -37,7 +37,6 @@
         </div>
         <button @click="newDocument" class="btn btn-secondary">New</button>
         <button @click="loadDocument" class="btn btn-secondary">Load</button>
-        <button @click="loadSchema" class="btn btn-info">Load Schema</button>
         <button @click="saveDocument" class="btn btn-success" :disabled="!isModified">Save</button>
         <button @click="validateXml" class="btn">Validate</button>
       </div>
@@ -64,10 +63,7 @@
           <span class="editor-status">
             <span v-if="isLoading" class="loading">Loading...</span>
             <span v-else-if="validationResult" :class="validationResult.valid ? 'valid' : 'invalid'">
-              {{ validationResult.valid ? 
-                (schemaContent ? '✓ Valid XML (Schema)' : '✓ Valid XML') : 
-                (schemaContent ? '✗ Invalid XML (Schema)' : '✗ Invalid XML') 
-              }}
+              {{ validationResult.valid ? '✓ Valid XML' : '✗ Invalid XML' }}
             </span>
             <span v-else-if="isModified">Modified</span>
             <span v-else>Ready</span>
@@ -78,8 +74,6 @@
         <XmlTreeEditor 
           v-else-if="editorMode === 'tree'"
           :initial-xml-content="initialTreeContent"
-          :schema-info="schemaInfo"
-          :schema-content="schemaContent"
           @xml-changed="handleXmlChanged"
           @tree-modified="handleTreeModified"
           ref="treeEditorRef"
@@ -104,24 +98,6 @@
       </div>
     </div>
 
-    <!-- Schema Information -->
-    <div v-if="schemaInfo" class="collapsible-panel">
-      <div class="panel-header" @click="showSchemaPanel = !showSchemaPanel">
-        <h4>Schema: {{ schemaInfo.targetNamespace || 'No namespace' }}</h4>
-        <span class="panel-toggle">{{ showSchemaPanel ? '▼' : '▶' }}</span>
-      </div>
-      <div v-if="showSchemaPanel" class="panel-content">
-        <div class="schema-elements">
-          <h5>Allowed Elements:</h5>
-          <ul>
-            <li v-for="element in schemaInfo.elements" :key="element.name">
-              <strong>{{ element.name }}</strong>
-              <span v-if="element.required" class="required">*</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -129,8 +105,6 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { xmlApi } from '@/services/api';
 import type { XmlDocument, SaveXmlRequest } from '@/types/xml';
-import type { SchemaInfo } from '@/services/xmlService';
-import { xmlService } from '@/services/xmlService';
 import * as monaco from 'monaco-editor';
 import XmlTreeEditor from '@/components/XmlTreeEditor.vue';
 
@@ -146,12 +120,8 @@ const selectedDocument = ref<XmlDocument | null>(null);
 const validationResult = ref<{ valid: boolean; error?: string } | null>(null);
 const editorMode = ref<'text' | 'tree'>('text');
 const initialTreeContent = ref('');
-const schemaInfo = ref<SchemaInfo | null>(null);
-const currentSchemaUrl = ref<string | null>(null);
-const schemaContent = ref<string | null>(null);
 
 // Panel visibility state
-const showSchemaPanel = ref(false);
 const showValidationErrors = ref(false);
 
 // Editor instance
@@ -323,36 +293,16 @@ const validateXml = async () => {
     isLoading.value = true;
     error.value = '';
 
-    if (schemaContent.value) {
-      // Schema-aware validation using SaxonJS
-      const result = await xmlService.validateAgainstSchema(xmlContent.value, schemaContent.value);
-      validationResult.value = {
-        valid: result.valid,
-        error: result.errors ? result.errors.join('\n') : undefined
-      };
-      
-      if (!result.valid) {
-        // Don't show validation errors in the main error area - they're shown in the collapsible panel
-        error.value = '';
-        // Auto-expand validation errors panel when there are errors
-        showValidationErrors.value = true;
-      } else {
-        error.value = '';
-        // Collapse validation errors panel when validation passes
-        showValidationErrors.value = false;
-      }
+    // Basic XML validation
+    validationResult.value = await xmlApi.validateXml(xmlContent.value);
+    if (!validationResult.value.valid) {
+      error.value = validationResult.value.error || 'Invalid XML';
+      // Auto-expand validation errors panel when there are errors
+      showValidationErrors.value = true;
     } else {
-      // Basic XML validation without schema
-      validationResult.value = await xmlApi.validateXml(xmlContent.value);
-      if (!validationResult.value.valid) {
-        error.value = validationResult.value.error || 'Invalid XML';
-        // Auto-expand validation errors panel when there are errors
-        showValidationErrors.value = true;
-      } else {
-        error.value = '';
-        // Collapse validation errors panel when validation passes
-        showValidationErrors.value = false;
-      }
+      error.value = '';
+      // Collapse validation errors panel when validation passes
+      showValidationErrors.value = false;
     }
   } catch (err) {
     error.value = `Validation failed: ${err}`;
@@ -420,91 +370,6 @@ const handleXmlChanged = (newContent: string) => {
   validationResult.value = null;
 };
 
-// Load XML Schema
-const loadSchema = async () => {
-  try {
-    isLoading.value = true;
-    error.value = '';
-    
-//    targetNamespace="http://example.com/library"
-//           xmlns:lib="http://example.com/library"
-    // For now, use a hardcoded schema for testing
-    const schemaContentString = `<?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
-           elementFormDefault="qualified">
-
-  <!-- Root element: library -->
-  <xs:element name="library">
-    <xs:complexType>
-      <xs:sequence>
-        <xs:element name="book" maxOccurs="unbounded">
-          <xs:complexType>
-            <xs:sequence>
-              <xs:element name="title" type="xs:string"/>
-              <xs:element name="author" type="xs:string"/>
-              <xs:element name="isbn" type="xs:string" minOccurs="0"/>
-              <xs:element name="genre" type="xs:string" minOccurs="0"/>
-              <xs:element name="published" type="xs:gYear" minOccurs="0"/>
-              <xs:element name="description" type="xs:string" minOccurs="0"/>
-            </xs:sequence>
-            <xs:attribute name="id" type="xs:ID" use="required"/>
-            <xs:attribute name="available" type="xs:boolean" use="required"/>
-          </xs:complexType>
-        </xs:element>
-      </xs:sequence>
-      <xs:attribute name="name" type="xs:string" use="required"/>
-    </xs:complexType>
-  </xs:element>
-
-</xs:schema>`;
-    
-    console.log('Loading hardcoded schema');
-    
-    // Parse the schema directly
-    const parser = new DOMParser();
-    const schemaDoc = parser.parseFromString(schemaContentString, 'application/xml');
-    
-    if (schemaDoc.documentElement) {
-      const parsedSchemaInfo: SchemaInfo = {
-        elements: []
-      };
-
-      // Extract target namespace
-      const targetNamespace = schemaDoc.documentElement.getAttribute('targetNamespace');
-      if (targetNamespace) {
-        parsedSchemaInfo.targetNamespace = targetNamespace || undefined;
-      }
-
-      // Extract elements
-      const elements = schemaDoc.querySelectorAll('element');
-      for (const element of elements) {
-        const name = element.getAttribute('name');
-        if (name) {
-          parsedSchemaInfo.elements.push({
-            name: name,
-            namespace: targetNamespace || undefined,
-            type: 'element',
-            required: true,
-            children: [],
-            attributes: []
-          });
-        }
-      }
-
-      schemaInfo.value = parsedSchemaInfo;
-      currentSchemaUrl.value = 'hardcoded';
-      schemaContent.value = schemaContentString;
-      console.log('Schema loaded successfully:', schemaInfo);
-    } else {
-      error.value = 'Failed to parse schema';
-    }
-  } catch (err) {
-    error.value = `Failed to load schema: ${err}`;
-    console.error('Schema loading error:', err);
-  } finally {
-    isLoading.value = false;
-  }
-};
 
 // Lifecycle
 onMounted(async () => {
@@ -759,27 +624,6 @@ onUnmounted(() => {
   padding: 1rem;
 }
 
-.schema-elements h5 {
-  margin: 0.5rem 0 0.25rem 0;
-  color: #6c757d;
-  font-size: 0.9rem;
-}
-
-.schema-elements ul {
-  margin: 0;
-  padding-left: 1.5rem;
-}
-
-.schema-elements li {
-  margin: 0.25rem 0;
-  color: #495057;
-}
-
-.schema-elements .required {
-  color: #dc3545;
-  font-weight: bold;
-  margin-left: 0.25rem;
-}
 
 .error-details {
   color: #721c24;

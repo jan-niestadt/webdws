@@ -13,27 +13,7 @@
   <div class="xml-tree-editor">
     <div class="tree-toolbar">
       <div class="toolbar-left">
-        <!-- Schema-aware element addition -->
-        <div v-if="schemaInfo && selectedNode && canHaveChildren(selectedNode)" class="element-dropdown">
-          <select 
-            @change="addElementFromSchema" 
-            class="btn btn-sm"
-            :disabled="!selectedNode || !canHaveChildren(selectedNode) || isLoadingAllowedContent"
-          >
-            <option value="">
-              {{ isLoadingAllowedContent ? 'Loading...' : 'Add Element...' }}
-            </option>
-            <option 
-              v-for="element in getAllowedElements()" 
-              :key="element" 
-              :value="element"
-            >
-              {{ element }}
-            </option>
-          </select>
-        </div>
         <button 
-          v-else
           @click="addElement" 
           class="btn btn-sm" 
           :disabled="!selectedNode || !canHaveChildren(selectedNode)"
@@ -163,39 +143,6 @@
       </div>
     </div>
 
-    <!-- Schema-aware allowed content information -->
-    <div v-if="allowedContent && selectedNode" class="collapsible-panel">
-      <div class="panel-header" @click="showAllowedContentPanel = !showAllowedContentPanel">
-        <h4>Allowed Content</h4>
-        <span class="panel-toggle">{{ showAllowedContentPanel ? '▼' : '▶' }}</span>
-      </div>
-      <div v-if="showAllowedContentPanel" class="panel-content">
-        <div v-if="allowedContent.elements.length > 0" class="content-group">
-          <label>Elements:</label>
-          <div class="allowed-elements">
-            <div v-for="element in allowedContent.elements" :key="element.name" class="allowed-item">
-              <span class="element-name">{{ element.name }}</span>
-              <span class="occurrence-info">
-                ({{ element.currentCount }}/{{ element.maxOccurs === 'unbounded' ? '∞' : element.maxOccurs }})
-              </span>
-              <span v-if="element.canAdd" class="can-add">✓</span>
-              <span v-else class="cannot-add">✗</span>
-            </div>
-          </div>
-        </div>
-        <div v-if="allowedContent.attributes.length > 0" class="content-group">
-          <label>Attributes:</label>
-          <div class="allowed-attributes">
-            <div v-for="attr in allowedContent.attributes" :key="attr.name" class="allowed-item">
-              <span class="attribute-name">{{ attr.name }}</span>
-              <span v-if="attr.required" class="required">*</span>
-              <span v-if="attr.present" class="present">✓</span>
-              <span v-else class="not-present">✗</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -204,13 +151,11 @@ import { ref, computed, watch, onMounted } from 'vue';
 import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
-import { xmlService, type SchemaInfo, type AllowedContent } from '@/services/xmlService';
+import { xmlService } from '@/services/xmlService';
 
 // Props
 const props = defineProps<{
   initialXmlContent: string;
-  schemaInfo?: SchemaInfo | null;
-  schemaContent?: string | null;
 }>();
 
 // Emits
@@ -226,12 +171,9 @@ const treeState = ref<XmlTreeState>({
   modified: false
 });
 
-const allowedContent = ref<AllowedContent | null>(null);
-const isLoadingAllowedContent = ref(false);
 
 // Panel visibility state
 const showPropertiesPanel = ref(true);
-const showAllowedContentPanel = ref(false);
 const showXPathPanel = ref(false);
 
 const editingNode = ref<XmlNode | null>(null);
@@ -365,56 +307,8 @@ const canHaveChildren = (node: XmlNode): boolean => {
   return node.type === 'element';
 };
 
-// Check if an element is allowed by the schema
-const isElementAllowed = (elementName: string): boolean => {
-  if (!allowedContent.value) {
-    return true; // No schema restrictions
-  }
 
-  const element = allowedContent.value.elements.find(el => el.name === elementName);
-  return element ? element.canAdd : false;
-};
 
-// Get allowed elements for the current context
-const getAllowedElements = (): string[] => {
-  if (!allowedContent.value) {
-    return ['element']; // Default element name
-  }
-
-  return allowedContent.value.elements
-    .filter(el => el.canAdd)
-    .map(el => el.name);
-};
-
-// Update allowed content when selection changes
-const updateAllowedContent = async () => {
-  if (!props.schemaContent || !selectedNode.value) {
-    allowedContent.value = null;
-    return;
-  }
-
-  try {
-    isLoadingAllowedContent.value = true;
-    const currentXml = getCurrentXmlContent();
-    const result = await xmlService.getAllowedContentAtPosition(
-      currentXml,
-      props.schemaContent
-    );
-
-    if (result.success && result.allowedContent) {
-      allowedContent.value = result.allowedContent;
-      console.log('Updated allowed content:', result.allowedContent);
-    } else {
-      console.warn('Failed to get allowed content:', result.error);
-      allowedContent.value = null;
-    }
-  } catch (error) {
-    console.error('Error updating allowed content:', error);
-    allowedContent.value = null;
-  } finally {
-    isLoadingAllowedContent.value = false;
-  }
-};
 
 const treeToXml = (node: XmlNode, indent: number = 0): string => {
   console.log('treeToXml called with node:', node);
@@ -489,8 +383,6 @@ const selectNode = (nodeId: string) => {
     }
   }
   
-  // Update allowed content when selection changes
-  updateAllowedContent();
 };
 
 const toggleNode = (nodeId: string) => {
@@ -541,15 +433,8 @@ const addChildNode = (parentId: string, newNode: XmlNode) => {
 const addElement = () => {
   if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
   
-  // Get allowed elements for the current context
-  const allowedElements = getAllowedElements();
-  if (allowedElements.length === 0) {
-    console.warn('No elements allowed by schema for this context');
-    return;
-  }
-  
-  // Use the first allowed element name, or prompt user for selection
-  const elementName = allowedElements[0];
+  // Use default element name
+  const elementName = 'element';
   
   const newElement: XmlNode = {
     id: generateId(),
@@ -563,34 +448,6 @@ const addElement = () => {
   selectNode(newElement.id);
 };
 
-const addElementFromSchema = (event: Event) => {
-  const target = event.target as HTMLSelectElement;
-  const elementName = target.value;
-  
-  if (!elementName || !selectedNode.value || !canHaveChildren(selectedNode.value)) {
-    target.value = ''; // Reset dropdown
-    return;
-  }
-  
-  // Check if element is allowed by schema
-  if (!isElementAllowed(elementName)) {
-    console.warn(`Element '${elementName}' is not allowed by schema`);
-    target.value = ''; // Reset dropdown
-    return;
-  }
-  
-  const newElement: XmlNode = {
-    id: generateId(),
-    type: 'element',
-    name: elementName,
-    children: [],
-    parent: selectedNode.value.id
-  };
-  
-  addChildNode(selectedNode.value.id, newElement);
-  selectNode(newElement.id);
-  target.value = ''; // Reset dropdown
-};
 
 const addText = () => {
   if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
