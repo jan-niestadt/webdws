@@ -17,8 +17,8 @@
           <button 
             @click="addElement" 
             class="btn btn-sm" 
-            :disabled="!selectedNode || !canHaveChildren(selectedNode)"
-            :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : 'Add new element'"
+            :disabled="!selectedNode || !canHaveChildren(selectedNode) || (selectedNode && getAllowedChildElements(selectedNode).length === 0)"
+            :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : (selectedNode && getAllowedChildElements(selectedNode).length === 0) ? 'No more elements can be added (max occurrence reached)' : 'Add new element'"
           >
             Add Element
           </button>
@@ -33,10 +33,19 @@
               <div class="element-info">
                 <span class="element-name">{{ element.name }}</span>
                 <span v-if="element.minOccurs > 0" class="required-indicator">*</span>
+                <span class="current-count">({{ countChildElements(selectedNode!, element.name) }}/{{ element.maxOccurs === 'unbounded' ? '∞' : element.maxOccurs }})</span>
               </div>
               <div class="element-details">
                 <span class="element-type">{{ element.type }}</span>
                 <span class="occurrence-info">{{ element.minOccurs }}..{{ element.maxOccurs }}</span>
+              </div>
+            </div>
+            <div v-if="allowedChildElements.length === 0" class="dropdown-item disabled">
+              <div class="element-info">
+                <span class="no-elements">No more elements can be added</span>
+              </div>
+              <div class="element-details">
+                <span class="reason">All elements have reached their maximum occurrence limit</span>
               </div>
             </div>
             <div @click="hideElementDropdown" class="dropdown-item cancel">Cancel</div>
@@ -750,7 +759,20 @@ const getAllowedChildElements = (parentNode: XmlNode): SchemaElement[] => {
     return []; // No allowed children defined
   }
   
-  return parentSchemaElement.children;
+  // Filter out elements that have reached their maximum occurrence limit
+  const allowedElements = parentSchemaElement.children.filter(schemaElement => {
+    const currentCount = countChildElements(parentNode, schemaElement.name);
+    const maxOccurs = schemaElement.maxOccurs;
+    
+    if (maxOccurs === 'unbounded') {
+      return true; // No limit
+    }
+    
+    const maxCount = parseInt(maxOccurs);
+    return currentCount < maxCount;
+  });
+  
+  return allowedElements;
 };
 
 const addSelectedElement = (element: SchemaElement) => {
@@ -772,6 +794,14 @@ const addSelectedElement = (element: SchemaElement) => {
 const hideElementDropdown = () => {
   showElementDropdown.value = false;
   allowedChildElements.value = [];
+};
+
+const countChildElements = (parentNode: XmlNode, elementName: string): number => {
+  if (!parentNode.children) return 0;
+  
+  return parentNode.children.filter(child => 
+    child.type === 'element' && child.name === elementName
+  ).length;
 };
 
 // Click outside handler to close dropdown
@@ -861,6 +891,27 @@ onUnmounted(() => {
   text-align: center;
 }
 
+.dropdown-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: #f8f9fa;
+}
+
+.dropdown-item.disabled:hover {
+  background: #f8f9fa;
+}
+
+.no-elements {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.reason {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
 .element-info {
   display: flex;
   align-items: center;
@@ -896,6 +947,13 @@ onUnmounted(() => {
   font-size: 0.75rem;
   color: #6c757d;
   font-family: monospace;
+}
+
+.current-count {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-family: monospace;
+  margin-left: 0.5rem;
 }
 
 .tree-container {
