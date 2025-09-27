@@ -126,7 +126,9 @@
     <div class="tree-container">
       <div v-if="!treeState.root" class="empty-state">
         <p>No XML content to display</p>
-        <button @click="createRootElement" class="btn">Create Root Element</button>
+        <button @click="createRootElement" class="btn">
+          {{ rootElement ? `Create ${rootElement.name} Element` : 'Create Root Element' }}
+        </button>
       </div>
       
       <div v-else class="tree-content">
@@ -166,7 +168,8 @@ import type { SchemaInfo, SchemaElement, SchemaAttribute } from '@/services/api'
 
 // Props
 const props = defineProps<{
-  initialXmlContent: string;
+  initialXmlContent?: string;
+  initialXmlNode?: XmlNode | null;
   schemaInfo?: SchemaInfo | null;
   rootElement?: SchemaElement | null;
 }>();
@@ -307,11 +310,12 @@ const getNodeType = (domNode: Node): XmlNode['type'] => {
 };
 
 const shouldIncludeNode = (domNode: Node): boolean => {
-  // Include all node types except empty or whitespace-only text nodes
+  // Include all node types except whitespace-only text nodes
   if (domNode.nodeType === Node.TEXT_NODE) {
     const text = domNode.textContent || '';
-    // Only include text nodes that have non-whitespace content
-    return text.trim().length > 0;
+    // Include text nodes that have content OR are empty (for editing)
+    // Only exclude whitespace-only text nodes
+    return text.trim().length > 0 || text.length === 0;
   }
   // Include all other node types (elements, comments, CDATA, etc.)
   return true;
@@ -597,13 +601,20 @@ const collapseAll = () => {
 };
 
 const createRootElement = () => {
-  const rootElement: XmlNode = {
-    id: generateId(),
-    type: 'element',
-    name: 'root',
-    children: [],
-    expanded: true
-  };
+  let rootElement: XmlNode;
+  
+  // Use schema root element if available, otherwise fallback to 'root'
+  if (props.rootElement && props.schemaInfo) {
+    rootElement = createElementWithRequiredContent(props.rootElement, '');
+  } else {
+    rootElement = {
+      id: generateId(),
+      type: 'element',
+      name: 'root',
+      children: [],
+      expanded: true
+    };
+  }
   
   treeState.value.root = rootElement;
   selectNode(rootElement.id);
@@ -659,8 +670,13 @@ defineExpose({
 });
 
 // Watch for changes to initial XML content
-watch(() => props.initialXmlContent, async (newContent) => {
-  if (newContent && newContent.trim()) {
+watch(() => [props.initialXmlContent, props.initialXmlNode], async ([newContent, newNode]) => {
+  if (newNode) {
+    // Use the provided XmlNode directly
+    treeState.value.root = newNode as XmlNode;
+    treeState.value.modified = false;
+  } else if (newContent && typeof newContent === 'string' && newContent.trim()) {
+    // Fall back to parsing XML content
     const parsed = await parseXmlToTree(newContent);
     if (parsed) {
       treeState.value.root = parsed;
@@ -671,9 +687,13 @@ watch(() => props.initialXmlContent, async (newContent) => {
   }
 }, { immediate: true });
 
-// Initialize tree with initial XML content
+// Initialize tree with initial XML content or node
 onMounted(async () => {
-  if (props.initialXmlContent && props.initialXmlContent.trim()) {
+  if (props.initialXmlNode) {
+    // Use the provided XmlNode directly
+    treeState.value.root = props.initialXmlNode;
+  } else if (props.initialXmlContent && props.initialXmlContent.trim()) {
+    // Fall back to parsing XML content
     const parsed = await parseXmlToTree(props.initialXmlContent);
     if (parsed) {
       treeState.value.root = parsed;

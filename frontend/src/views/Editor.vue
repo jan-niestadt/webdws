@@ -75,7 +75,7 @@
         <div v-if="editorMode === 'text'" class="monaco-editor-container" ref="editorContainer"></div>
         <XmlTreeEditor 
           v-else-if="editorMode === 'tree'"
-          :initial-xml-content="initialTreeContent"
+          :initial-xml-node="initialTreeNode"
           :schema-info="schemaInfo"
           :root-element="rootElement"
           @xml-changed="handleXmlChanged"
@@ -108,7 +108,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { xmlApi, schemaApi } from '@/services/api';
-import type { XmlDocument, SaveXmlRequest } from '@/types/xml';
+import type { XmlDocument, SaveXmlRequest, XmlNode } from '@/types/xml';
 import type { SchemaInfo, SchemaElement } from '@/services/api';
 import { xmlService } from '@/services/xmlService';
 import * as monaco from 'monaco-editor';
@@ -126,6 +126,7 @@ const selectedDocument = ref<XmlDocument | null>(null);
 const validationResult = ref<{ valid: boolean; error?: string } | null>(null);
 const editorMode = ref<'text' | 'tree'>('text');
 const initialTreeContent = ref('');
+const initialTreeNode = ref<XmlNode | null>(null);
 
 // Schema-related state
 const schemaInfo = ref<SchemaInfo | null>(null);
@@ -290,84 +291,6 @@ const saveDocument = async () => {
   }
 };
 
-// Helper function to get default attribute value
-const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
-  // Use default value if specified in schema
-  if (attr.defaultValue) {
-    return attr.defaultValue;
-  }
-  
-  // Use fixed value if specified in schema
-  if (attr.fixedValue) {
-    return attr.fixedValue;
-  }
-  
-  // Generate type-based defaults
-  const type = attr.type.toLowerCase();
-  
-  if (type.includes('boolean')) {
-    return 'false';
-  }
-  
-  if (type.includes('int') && !type.includes('string')) {
-    return '0';
-  }
-  
-  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
-    return '0';
-  }
-  
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  // For strings and other types, return empty string
-  return '';
-};
-
-// Helper function to get default text content
-const getDefaultTextContent = (element: any): string => {
-  // Use default value if specified in schema
-  if (element.defaultValue) {
-    return element.defaultValue;
-  }
-  
-  // Use fixed value if specified in schema
-  if (element.fixedValue) {
-    return element.fixedValue;
-  }
-  
-  // Generate type-based defaults for text content
-  const type = element.type.toLowerCase();
-  
-  if (type.includes('boolean')) {
-    return 'false';
-  }
-  
-  if (type.includes('int') && !type.includes('string')) {
-    return '0';
-  }
-  
-  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
-    return '0';
-  }
-  
-  // For date fields, provide type-based defaults only if no schema default
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  // For strings and other types, return empty string
-  return '';
-};
 
 // Unified function to create XML element with required content
 const createElementXML = (element: any, indentLevel: number = 0, isRoot: boolean = false): string => {
@@ -421,9 +344,182 @@ const createElementXML = (element: any, indentLevel: number = 0, isRoot: boolean
   return xml;
 };
 
-// Helper function to create root element with required content
-const createRootElementWithRequiredContent = (rootElement: any): string => {
-  return createElementXML(rootElement, 0, true);
+// Helper functions for creating elements with required content
+const generateId = (): string => {
+  return Math.random().toString(36).substr(2, 9);
+};
+
+const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
+  // Use default value if specified in schema
+  if (attr.defaultValue) {
+    return attr.defaultValue;
+  }
+  
+  // Use fixed value if specified in schema
+  if (attr.fixedValue) {
+    return attr.fixedValue;
+  }
+  
+  // Generate type-based defaults
+  const type = attr.type.toLowerCase();
+  
+  if (type.includes('boolean')) {
+    return 'false';
+  }
+  
+  if (type.includes('int') && !type.includes('string')) {
+    return '0';
+  }
+  
+  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
+    return '0';
+  }
+  
+  if (type.includes('date')) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  if (type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
+  
+  // For other types, return empty string
+  return '';
+};
+
+const getDefaultTextContent = (element: SchemaElement): string => {
+  // Use default value if specified in schema
+  if (element.defaultValue) {
+    return element.defaultValue;
+  }
+  
+  // Use fixed value if specified in schema
+  if (element.fixedValue) {
+    return element.fixedValue;
+  }
+  
+  // Generate type-based defaults for text content
+  const type = element.type.toLowerCase();
+  
+  if (type.includes('boolean')) {
+    return 'false';
+  }
+  
+  if (type.includes('int') && !type.includes('string')) {
+    return '0';
+  }
+  
+  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
+    return '0';
+  }
+  
+  // For date fields, provide type-based defaults only if no schema default
+  if (type.includes('date')) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  if (type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
+  
+  // For other types, return empty string
+  return '';
+};
+
+const createElementWithRequiredContent = (schemaElement: SchemaElement, parentId: string): XmlNode => {
+  const element: XmlNode = {
+    id: generateId(),
+    type: 'element',
+    name: schemaElement.name,
+    value: '',
+    parent: parentId,
+    children: []
+  };
+  
+  // Add required attributes
+  if (schemaElement.attributes) {
+    for (const attr of schemaElement.attributes) {
+      if (attr.use === 'required') {
+        const attrNode: XmlNode = {
+          id: generateId(),
+          type: 'attribute',
+          name: attr.name,
+          value: getDefaultAttributeValue(attr),
+          parent: element.id,
+          children: []
+        };
+        element.children.push(attrNode);
+      }
+    }
+  }
+  
+  // Add text content for simple types
+  if (schemaElement.type && !schemaElement.children) {
+    const textContent = getDefaultTextContent(schemaElement);
+    const textNode: XmlNode = {
+      id: generateId(),
+      type: 'text',
+      value: textContent,
+      parent: element.id,
+      children: []
+    };
+    element.children.push(textNode);
+  }
+  
+  // Add required child elements
+  if (schemaElement.children) {
+    for (const childSchema of schemaElement.children) {
+      if (childSchema.minOccurs > 0) {
+        for (let i = 0; i < childSchema.minOccurs; i++) {
+          const childElement = createElementWithRequiredContent(childSchema, element.id);
+          element.children.push(childElement);
+        }
+      }
+    }
+  }
+  
+  return element;
+};
+
+// Helper function to create root element with required content as XmlNode
+const createRootElementWithRequiredContent = (rootElement: any): XmlNode => {
+  return createElementWithRequiredContent(rootElement, '');
+};
+
+// Helper function to convert XmlNode to XML string
+const xmlNodeToXml = (node: XmlNode): string => {
+  if (node.type === 'element') {
+    let xml = `<${node.name}`;
+    
+    // Add attributes
+    const attributeNodes = node.children.filter(child => child.type === 'attribute');
+    for (const attr of attributeNodes) {
+      xml += ` ${attr.name}="${attr.value}"`;
+    }
+    
+    xml += '>';
+    
+    // Add text content and child elements
+    const textNodes = node.children.filter(child => child.type === 'text');
+    const elementNodes = node.children.filter(child => child.type === 'element');
+    
+    // Add text content
+    for (const textNode of textNodes) {
+      xml += textNode.value;
+    }
+    
+    // Add child elements
+    for (const childNode of elementNodes) {
+      xml += xmlNodeToXml(childNode);
+    }
+    
+    xml += `</${node.name}>`;
+    return xml;
+  } else if (node.type === 'text') {
+    return node.value || '';
+  }
+  
+  return '';
 };
 
 // Create new document
@@ -431,28 +527,38 @@ const newDocument = () => {
   selectedDocument.value = null;
   documentName.value = '';
   
-  // Use schema root element if available, otherwise fallback to 'root'
-  const rootElementName = rootElement.value?.name || 'root';
-  let newXml = `<?xml version="1.0" encoding="UTF-8"?>\n<${rootElementName}></${rootElementName}>`;
+  let rootNode: XmlNode;
   
-  // If schema is available, create a more complete root element with required content
+  // If schema is available, create a complete root element with required content
   if (rootElement.value && schemaInfo.value) {
-    newXml = createRootElementWithRequiredContent(rootElement.value);
+    rootNode = createRootElementWithRequiredContent(rootElement.value);
+  } else {
+    // Fallback to simple root element
+    rootNode = {
+      id: generateId(),
+      type: 'element',
+      name: 'root',
+      value: '',
+      children: []
+    };
   }
+  
+  // Set the initial tree node for the tree editor
+  initialTreeNode.value = rootNode;
+  
+  // Generate XML content for text mode
+  const xmlString = '<?xml version="1.0" encoding="UTF-8"?>\n' + xmlNodeToXml(rootNode);
   
   // Format XML content if in text mode
   if (editorMode.value === 'text') {
     try {
-      xmlContent.value = xmlService.formatXml(newXml);
-      initialTreeContent.value = newXml; // Keep original for tree mode
+      xmlContent.value = xmlService.formatXml(xmlString);
     } catch (error) {
       console.warn('Failed to format new XML:', error);
-      xmlContent.value = newXml;
-      initialTreeContent.value = newXml;
+      xmlContent.value = xmlString;
     }
   } else {
-    xmlContent.value = newXml;
-    initialTreeContent.value = newXml;
+    xmlContent.value = xmlString;
   }
   
   if (editor) {
