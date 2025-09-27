@@ -62,10 +62,12 @@
         <div class="editor-toolbar">
           <span class="editor-status">
             <span v-if="isLoading" class="loading">Loading...</span>
+            <span v-else-if="isLoadingSchema" class="loading">Loading Schema...</span>
             <span v-else-if="validationResult" :class="validationResult.valid ? 'valid' : 'invalid'">
               {{ validationResult.valid ? '✓ Valid XML' : '✗ Invalid XML' }}
             </span>
             <span v-else-if="isModified">Modified</span>
+            <span v-else-if="schemaInfo" class="schema-loaded">📋 Schema: {{ rootElement?.name || 'Loaded' }}</span>
             <span v-else>Ready</span>
           </span>
         </div>
@@ -74,6 +76,8 @@
         <XmlTreeEditor 
           v-else-if="editorMode === 'tree'"
           :initial-xml-content="initialTreeContent"
+          :schema-info="schemaInfo"
+          :root-element="rootElement"
           @xml-changed="handleXmlChanged"
           @tree-modified="handleTreeModified"
           ref="treeEditorRef"
@@ -103,8 +107,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
-import { xmlApi } from '@/services/api';
+import { xmlApi, schemaApi } from '@/services/api';
 import type { XmlDocument, SaveXmlRequest } from '@/types/xml';
+import type { SchemaInfo, SchemaElement } from '@/services/api';
 import { xmlService } from '@/services/xmlService';
 import * as monaco from 'monaco-editor';
 import XmlTreeEditor from '@/components/XmlTreeEditor.vue';
@@ -121,6 +126,12 @@ const selectedDocument = ref<XmlDocument | null>(null);
 const validationResult = ref<{ valid: boolean; error?: string } | null>(null);
 const editorMode = ref<'text' | 'tree'>('text');
 const initialTreeContent = ref('');
+
+// Schema-related state
+const schemaInfo = ref<SchemaInfo | null>(null);
+const isLoadingSchema = ref(false);
+const schemaError = ref('');
+const rootElement = ref<SchemaElement | null>(null);
 
 // Panel visibility state
 const showValidationErrors = ref(false);
@@ -162,6 +173,26 @@ const initEditor = () => {
     });
   }
   // In text mode, the editor is read-only and should never trigger content changes
+};
+
+// Load schema
+const loadSchema = async () => {
+  try {
+    isLoadingSchema.value = true;
+    schemaError.value = '';
+    const schema = await schemaApi.getDefaultSchema();
+    schemaInfo.value = schema;
+    
+    // Find the root element (first element in the schema)
+    if (schema.elements && schema.elements.length > 0) {
+      rootElement.value = schema.elements[0];
+    }
+  } catch (err) {
+    schemaError.value = `Failed to load schema: ${err}`;
+    console.warn('Schema loading failed:', err);
+  } finally {
+    isLoadingSchema.value = false;
+  }
 };
 
 // Load documents list
@@ -263,7 +294,10 @@ const saveDocument = async () => {
 const newDocument = () => {
   selectedDocument.value = null;
   documentName.value = '';
-  const newXml = '<?xml version="1.0" encoding="UTF-8"?>\n<root></root>';
+  
+  // Use schema root element if available, otherwise fallback to 'root'
+  const rootElementName = rootElement.value?.name || 'root';
+  const newXml = `<?xml version="1.0" encoding="UTF-8"?>\n<${rootElementName}></${rootElementName}>`;
   
   // Format XML content if in text mode
   if (editorMode.value === 'text') {
@@ -307,31 +341,105 @@ const deleteDocument = async (id: string) => {
 
 // Validate XML
 const validateXml = async () => {
-  if (!xmlContent.value.trim()) {
-    error.value = 'No content to validate';
-    return;
-  }
-
   try {
     isLoading.value = true;
-    error.value = '';
-
-    // Basic XML validation
-    validationResult.value = await xmlApi.validateXml(xmlContent.value);
-    if (!validationResult.value.valid) {
-      error.value = validationResult.value.error || 'Invalid XML';
-      // Auto-expand validation errors panel when there are errors
+    validationResult.value = null;
+    
+    // Get current XML content from tree editor if in tree mode
+    let currentXmlContent = xmlContent.value;
+    if (editorMode.value === 'tree' && treeEditorRef.value) {
+      currentXmlContent = treeEditorRef.value.getCurrentXmlContent();
+    }
+    
+    if (!currentXmlContent.trim()) {
+      validationResult.value = { valid: false, error: 'No content to validate' };
+      error.value = 'No content to validate';
+      return;
+    }
+    
+    // First validate basic XML structure
+    const basicResult = await xmlApi.validateXml(currentXmlContent);
+    if (!basicResult.valid) {
+      validationResult.value = basicResult;
+      error.value = basicResult.error || 'XML validation failed';
       showValidationErrors.value = true;
+      return;
+    }
+    
+    // If schema is available, perform schema validation
+    if (schemaInfo.value) {
+      const schemaValidationResult = await validateAgainstSchema(currentXmlContent);
+      validationResult.value = schemaValidationResult;
+      
+      if (!schemaValidationResult.valid) {
+        error.value = schemaValidationResult.error || 'Schema validation failed';
+        showValidationErrors.value = true;
+      } else {
+        error.value = '';
+        showValidationErrors.value = false;
+      }
     } else {
-      error.value = '';
-      // Collapse validation errors panel when validation passes
-      showValidationErrors.value = false;
+      // No schema available, just use basic validation
+      validationResult.value = basicResult;
+      if (basicResult.valid) {
+        error.value = '';
+        showValidationErrors.value = false;
+      } else {
+        error.value = basicResult.error || 'Validation failed';
+        showValidationErrors.value = true;
+      }
     }
   } catch (err) {
+    validationResult.value = { valid: false, error: `Validation error: ${err}` };
     error.value = `Validation failed: ${err}`;
-    validationResult.value = { valid: false, error: error.value };
+    showValidationErrors.value = true;
   } finally {
     isLoading.value = false;
+  }
+};
+
+// Validate XML against schema
+const validateAgainstSchema = async (xmlContent: string): Promise<{ valid: boolean; error?: string }> => {
+  if (!schemaInfo.value) {
+    return { valid: true }; // No schema to validate against
+  }
+  
+  try {
+    // Parse the XML content
+    const parseResult = xmlService.parseXml(xmlContent);
+    if (!parseResult.success || !parseResult.document) {
+      return { valid: false, error: 'Invalid XML structure' };
+    }
+    
+    const rootElement = parseResult.document.documentElement;
+    if (!rootElement) {
+      return { valid: false, error: 'No root element found' };
+    }
+    
+    // Check if root element matches schema
+    const expectedRootElement = schemaInfo.value.elements[0];
+    if (expectedRootElement && rootElement.tagName !== expectedRootElement.name) {
+      return { 
+        valid: false, 
+        error: `Root element must be '${expectedRootElement.name}', found '${rootElement.tagName}'` 
+      };
+    }
+    
+    // Basic schema validation - check required attributes
+    if (expectedRootElement?.attributes) {
+      for (const attr of expectedRootElement.attributes) {
+        if (attr.use === 'required' && !rootElement.hasAttribute(attr.name)) {
+          return { 
+            valid: false, 
+            error: `Required attribute '${attr.name}' is missing on element '${rootElement.tagName}'` 
+          };
+        }
+      }
+    }
+    
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, error: `Schema validation error: ${error}` };
   }
 };
 
@@ -402,6 +510,9 @@ const handleXmlChanged = (newContent: string) => {
 onMounted(async () => {
   await nextTick();
   initEditor();
+  
+  // Load schema first, then create new document
+  await loadSchema();
   newDocument(); // Start with a new document
 });
 
@@ -588,6 +699,11 @@ onUnmounted(() => {
 
 .editor-status .invalid {
   color: #e74c3c;
+}
+
+.editor-status .schema-loaded {
+  color: #007bff;
+  font-size: 0.9em;
 }
 
 .monaco-editor-container {

@@ -152,10 +152,13 @@ import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
 import { xmlService } from '@/services/xmlService';
+import type { SchemaInfo, SchemaElement } from '@/services/api';
 
 // Props
 const props = defineProps<{
   initialXmlContent: string;
+  schemaInfo?: SchemaInfo | null;
+  rootElement?: SchemaElement | null;
 }>();
 
 // Emits
@@ -413,19 +416,37 @@ const addChildNode = (parentId: string, newNode: XmlNode) => {
 const addElement = () => {
   if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
   
-  // Use default element name
-  const elementName = 'element';
+  // Get allowed child elements based on schema
+  const allowedElements = getAllowedChildElements(selectedNode.value);
   
-  const newElement: XmlNode = {
-    id: generateId(),
-    type: 'element',
-    name: elementName,
-    children: [],
-    parent: selectedNode.value.id
-  };
-  
-  addChildNode(selectedNode.value.id, newElement);
-  selectNode(newElement.id);
+  if (allowedElements.length === 0) {
+    // No schema restrictions, use default element name
+    const elementName = 'element';
+    const newElement: XmlNode = {
+      id: generateId(),
+      type: 'element',
+      name: elementName,
+      children: [],
+      parent: selectedNode.value.id
+    };
+    addChildNode(selectedNode.value.id, newElement);
+    selectNode(newElement.id);
+  } else if (allowedElements.length === 1) {
+    // Only one allowed element, use it directly
+    const elementName = allowedElements[0].name;
+    const newElement: XmlNode = {
+      id: generateId(),
+      type: 'element',
+      name: elementName,
+      children: [],
+      parent: selectedNode.value.id
+    };
+    addChildNode(selectedNode.value.id, newElement);
+    selectNode(newElement.id);
+  } else {
+    // Multiple allowed elements, show selection dialog
+    showElementSelectionDialog(allowedElements);
+  }
 };
 
 
@@ -677,6 +698,56 @@ onMounted(async () => {
     }
   }
 });
+
+// Schema-aware helper functions
+const getAllowedChildElements = (parentNode: XmlNode): SchemaElement[] => {
+  if (!props.schemaInfo || !props.rootElement) {
+    return []; // No schema restrictions
+  }
+  
+  // Find the schema element definition for the parent node
+  const findSchemaElement = (elementName: string, schemaElements: SchemaElement[]): SchemaElement | null => {
+    for (const element of schemaElements) {
+      if (element.name === elementName) {
+        return element;
+      }
+      if (element.children) {
+        const found = findSchemaElement(elementName, element.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  
+  const parentSchemaElement = findSchemaElement(parentNode.name || '', props.schemaInfo.elements);
+  if (!parentSchemaElement || !parentSchemaElement.children) {
+    return []; // No allowed children defined
+  }
+  
+  return parentSchemaElement.children;
+};
+
+const showElementSelectionDialog = (allowedElements: SchemaElement[]) => {
+  // Create a simple selection dialog
+  const elementNames = allowedElements.map(el => el.name);
+  const selectedName = prompt(`Select element to add:\n${elementNames.map((name, idx) => `${idx + 1}. ${name}`).join('\n')}\n\nEnter the number:`);
+  
+  if (selectedName) {
+    const index = parseInt(selectedName) - 1;
+    if (index >= 0 && index < allowedElements.length) {
+      const elementName = allowedElements[index].name;
+      const newElement: XmlNode = {
+        id: generateId(),
+        type: 'element',
+        name: elementName,
+        children: [],
+        parent: selectedNode.value!.id
+      };
+      addChildNode(selectedNode.value!.id, newElement);
+      selectNode(newElement.id);
+    }
+  }
+};
 </script>
 
 <style scoped>
