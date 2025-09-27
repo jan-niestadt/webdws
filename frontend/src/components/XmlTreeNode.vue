@@ -51,16 +51,7 @@
           class="attribute-edit"
           @click.stop
         >
-          <input 
-            v-model="editingName"
-            @blur="finishAttributeEdit"
-            @keydown.enter.prevent="finishAttributeEdit"
-            @keydown.escape.prevent="cancelInlineEdit"
-            class="attribute-name-input"
-            ref="nameInput"
-            placeholder="attribute name"
-            :title="'Press Enter to save, Escape to cancel'"
-          />
+          <span class="attribute-name-display">{{ node.name }}</span>
           <span class="attribute-equals">=</span>
           <input 
             v-model="editingValue"
@@ -174,9 +165,7 @@ const emit = defineEmits<{
 // Reactive state for inline editing
 const isEditing = ref(false);
 const editingValue = ref('');
-const editingName = ref('');
 const editInput = ref<HTMLInputElement | null>(null);
-const nameInput = ref<HTMLInputElement | null>(null);
 const valueInput = ref<HTMLInputElement | null>(null);
 
 // Watch for external changes to node value
@@ -235,12 +224,8 @@ const startInlineEdit = async () => {
   isEditing.value = true;
   editingValue.value = props.node.value || '';
   
-  if (props.node.type === 'attribute') {
-    editingName.value = props.node.name || '';
-  }
-  
   await nextTick();
-  const inputToFocus = props.node.type === 'attribute' ? nameInput.value : editInput.value;
+  const inputToFocus = props.node.type === 'attribute' ? valueInput.value : editInput.value;
   if (inputToFocus) {
     inputToFocus.focus();
     inputToFocus.select();
@@ -266,26 +251,23 @@ const finishInlineEdit = () => {
 const finishAttributeEdit = () => {
   if (!isEditing.value || props.node.type !== 'attribute') return;
   
-  const newName = editingName.value.trim();
   const newValue = editingValue.value.trim();
   
-  if (newName !== props.node.name || newValue !== props.node.value) {
+  if (newValue !== props.node.value) {
     emit('edit', {
       nodeId: props.node.id,
-      field: 'attribute',
-      value: { name: newName, value: newValue }
+      field: 'value',
+      value: newValue
     });
   }
   
   isEditing.value = false;
-  editingName.value = '';
   editingValue.value = '';
 };
 
 const cancelInlineEdit = () => {
   isEditing.value = false;
   editingValue.value = '';
-  editingName.value = '';
 };
 </script>
 
@@ -398,7 +380,6 @@ const cancelInlineEdit = () => {
   padding: 2px 4px;
 }
 
-.attribute-name-input,
 .attribute-value-input {
   background: transparent;
   border: none;
@@ -410,9 +391,12 @@ const cancelInlineEdit = () => {
   border-radius: 2px;
 }
 
-.attribute-name-input {
-  min-width: 80px;
+.attribute-name-display {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
   font-weight: bold;
+  color: #2c3e50;
+  padding: 2px 4px;
 }
 
 .attribute-value-input {

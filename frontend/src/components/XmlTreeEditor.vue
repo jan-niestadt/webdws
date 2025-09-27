@@ -71,14 +71,43 @@
         >
           Add Comment
         </button>
-        <button 
-          @click="addAttribute" 
-          class="btn btn-sm" 
-          :disabled="!selectedNode || selectedNode.type !== 'element'"
-          :title="!selectedNode ? 'Select a node first' : selectedNode.type !== 'element' ? 'Only element nodes can have attributes' : 'Add attribute'"
-        >
-          Add Attribute
-        </button>
+        <div class="add-attribute-container">
+          <button 
+            @click="addAttribute" 
+            class="btn btn-sm" 
+            :disabled="!selectedNode || selectedNode.type !== 'element' || (selectedNode && getAllowedAttributes(selectedNode).length === 0)"
+            :title="!selectedNode ? 'Select a node first' : selectedNode.type !== 'element' ? 'Only element nodes can have attributes' : (selectedNode && getAllowedAttributes(selectedNode).length === 0) ? 'No more attributes can be added' : 'Add attribute'"
+          >
+            Add Attribute
+          </button>
+          <div v-if="showAttributeDropdown" class="attribute-dropdown">
+            <div class="dropdown-header">Select attribute to add:</div>
+            <div 
+              v-for="(attr, index) in allowedAttributes" 
+              :key="index"
+              @click="addSelectedAttribute(attr)"
+              class="dropdown-item"
+            >
+              <div class="attribute-info">
+                <span class="attribute-name">{{ attr.name }}</span>
+                <span v-if="attr.use === 'required'" class="required-indicator">*</span>
+                <span class="attribute-type">{{ attr.type }}</span>
+              </div>
+              <div v-if="attr.defaultValue" class="attribute-details">
+                <span class="default-value">Default: {{ attr.defaultValue }}</span>
+              </div>
+            </div>
+            <div v-if="allowedAttributes.length === 0" class="dropdown-item disabled">
+              <div class="attribute-info">
+                <span class="no-attributes">No more attributes can be added</span>
+              </div>
+              <div class="attribute-details">
+                <span class="reason">All allowed attributes already exist</span>
+              </div>
+            </div>
+            <div @click="hideAttributeDropdown" class="dropdown-item cancel">Cancel</div>
+          </div>
+        </div>
         <button 
           @click="deleteNode" 
           class="btn btn-sm btn-danger" 
@@ -133,7 +162,7 @@ import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
 import { xmlService } from '@/services/xmlService';
-import type { SchemaInfo, SchemaElement } from '@/services/api';
+import type { SchemaInfo, SchemaElement, SchemaAttribute } from '@/services/api';
 
 // Props
 const props = defineProps<{
@@ -162,6 +191,10 @@ const showXPathPanel = ref(false);
 // Element dropdown state
 const showElementDropdown = ref(false);
 const allowedChildElements = ref<SchemaElement[]>([]);
+
+// Attribute dropdown state
+const showAttributeDropdown = ref(false);
+const allowedAttributes = ref<SchemaAttribute[]>([]);
 
 // Computed
 const selectedNode = computed(() => {
@@ -463,17 +496,29 @@ const addComment = () => {
 const addAttribute = () => {
   if (!selectedNode.value || selectedNode.value.type !== 'element') return;
   
-  const newAttribute: XmlNode = {
-    id: generateId(),
-    type: 'attribute',
-    name: 'newAttribute',
-    value: '',
-    children: [],
-    parent: selectedNode.value.id
-  };
+  // Get allowed attributes based on schema
+  const allowedAttrs = getAllowedAttributes(selectedNode.value);
   
-  addChildNode(selectedNode.value.id, newAttribute);
-  selectNode(newAttribute.id);
+  if (allowedAttrs.length === 0) {
+    // No schema restrictions, create a default attribute
+    const newAttribute: XmlNode = {
+      id: generateId(),
+      type: 'attribute',
+      name: 'newAttribute',
+      value: '',
+      children: [],
+      parent: selectedNode.value.id
+    };
+    addChildNode(selectedNode.value.id, newAttribute);
+    selectNode(newAttribute.id);
+  } else if (allowedAttrs.length === 1) {
+    // Only one allowed attribute, use it directly
+    addSelectedAttribute(allowedAttrs[0]);
+  } else if (allowedAttrs.length > 1) {
+    // Multiple allowed attributes, show dropdown
+    allowedAttributes.value = allowedAttrs;
+    showAttributeDropdown.value = true;
+  }
 };
 
 const removeNode = (nodeId: string) => {
@@ -796,6 +841,64 @@ const hasRequiredContent = (element: SchemaElement): boolean => {
   return false;
 };
 
+const getAllowedAttributes = (elementNode: XmlNode): SchemaAttribute[] => {
+  if (!props.schemaInfo || !props.rootElement) {
+    return []; // No schema restrictions
+  }
+  
+  // Find the schema element definition for the current element
+  const findSchemaElement = (elementName: string, schemaElements: SchemaElement[]): SchemaElement | null => {
+    for (const element of schemaElements) {
+      if (element.name === elementName) {
+        return element;
+      }
+      if (element.children) {
+        const found = findSchemaElement(elementName, element.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  
+  const schemaElement = findSchemaElement(elementNode.name || '', props.schemaInfo.elements);
+  if (!schemaElement || !schemaElement.attributes) {
+    return []; // No attributes defined for this element
+  }
+  
+  // Get existing attribute names
+  const existingAttributeNames = new Set(
+    elementNode.children
+      .filter(child => child.type === 'attribute')
+      .map(attr => attr.name)
+      .filter(Boolean)
+  );
+  
+  // Filter out attributes that already exist
+  return schemaElement.attributes.filter(attr => !existingAttributeNames.has(attr.name));
+};
+
+const addSelectedAttribute = (attr: SchemaAttribute) => {
+  if (!selectedNode.value) return;
+  
+  const newAttribute: XmlNode = {
+    id: generateId(),
+    type: 'attribute',
+    name: attr.name,
+    value: getDefaultAttributeValue(attr),
+    children: [],
+    parent: selectedNode.value.id
+  };
+  
+  addChildNode(selectedNode.value.id, newAttribute);
+  selectNode(newAttribute.id);
+  hideAttributeDropdown();
+};
+
+const hideAttributeDropdown = () => {
+  showAttributeDropdown.value = false;
+  allowedAttributes.value = [];
+};
+
 const getDefaultTextContent = (element: SchemaElement): string => {
   const name = element.name.toLowerCase();
   const type = element.type.toLowerCase();
@@ -853,11 +956,14 @@ const getDefaultTextContent = (element: SchemaElement): string => {
   return '';
 };
 
-// Click outside handler to close dropdown
+// Click outside handler to close dropdowns
 const handleClickOutside = (event: Event) => {
   const target = event.target as HTMLElement;
   if (!target.closest('.add-element-container')) {
     hideElementDropdown();
+  }
+  if (!target.closest('.add-attribute-container')) {
+    hideAttributeDropdown();
   }
 };
 
@@ -1020,6 +1126,58 @@ onUnmounted(() => {
 .auto-create-text {
   font-size: 0.7rem;
   color: #28a745;
+  font-style: italic;
+}
+
+.add-attribute-container {
+  position: relative;
+  display: inline-block;
+}
+
+.attribute-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 250px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.attribute-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attribute-name {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.attribute-type {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-family: monospace;
+}
+
+.attribute-details {
+  margin-top: 0.25rem;
+  padding-left: 1rem;
+}
+
+.default-value {
+  font-size: 0.7rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.no-attributes {
+  color: #6c757d;
   font-style: italic;
 }
 
