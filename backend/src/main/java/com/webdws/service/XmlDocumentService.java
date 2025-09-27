@@ -120,11 +120,15 @@ public class XmlDocumentService {
         XmlDocument document = repository.findById(id)
             .orElseThrow(() -> new RuntimeException("Document not found with id: " + id));
         
-        // Delete from eXist-db
-        try {
-            existDbService.deleteDocument(document.getExistDbId());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to delete document from eXist-db", e);
+        // Delete from eXist-db (if existDbId exists)
+        if (document.getExistDbId() != null && !document.getExistDbId().trim().isEmpty()) {
+            try {
+                existDbService.deleteDocument(document.getExistDbId());
+            } catch (Exception e) {
+                // Log the error but continue with PostgreSQL deletion
+                System.err.println("Warning: Failed to delete document from eXist-db: " + e.getMessage());
+                // Don't throw the exception - continue with PostgreSQL cleanup
+            }
         }
         
         // Delete from PostgreSQL

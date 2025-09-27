@@ -15,13 +15,13 @@
       :class="{ 
         'selected': isSelected,
         'expanded': node.expanded,
-        'collapsed': !node.expanded && node.children.length > 0
+        'collapsed': !node.expanded && node.children.length > 0 && !isSimpleElement
       }"
       @click="handleNodeClick"
     >
       <div class="node-content">
         <span 
-          v-if="node.children.length > 0" 
+          v-if="node.children.length > 0 && !isSimpleElement" 
           class="expand-toggle"
           @click.stop="toggleNode"
         >
@@ -33,9 +33,39 @@
           {{ getNodeIcon(node.type) }}
         </span>
         
-        <span class="node-name" v-if="node.type === 'element'">
+        <span 
+          v-if="node.type === 'element' && !isSimpleElement" 
+          class="node-name"
+        >
           &lt;{{ node.name }}{{ node.children.length === 0 ? ' /' : '' }}&gt;
         </span>
+        
+        <span 
+          v-else-if="node.type === 'element' && isSimpleElement && !isEditing" 
+          class="node-value editable simple-element"
+          @click.stop="startInlineEdit"
+          :title="'Click to edit: ' + getSimpleElementValue()"
+        >
+          &lt;{{ node.name }}&gt;{{ getSimpleElementValue() }}&lt;/{{ node.name }}&gt;
+        </span>
+        
+        <div 
+          v-else-if="node.type === 'element' && isSimpleElement && isEditing"
+          class="simple-element-edit"
+          @click.stop
+        >
+          <span class="element-name">&lt;{{ node.name }}&gt;</span>
+          <input 
+            v-model="editingValue"
+            @blur="finishInlineEdit"
+            @keydown.enter.prevent="finishInlineEdit"
+            @keydown.escape.prevent="cancelInlineEdit"
+            class="element-value-input"
+            ref="editInput"
+            :title="'Press Enter to save, Escape to cancel'"
+          />
+          <span class="element-name">&lt;/{{ node.name }}&gt;</span>
+        </div>
         
         <span 
           v-else-if="node.type === 'attribute' && !isEditing" 
@@ -135,12 +165,13 @@
       </div>
     </div>
     
-    <div v-if="node.expanded && node.children.length > 0" class="node-children">
+    <div v-if="node.expanded && node.children.length > 0 && !isSimpleElement" class="node-children">
       <XmlTreeNode
         v-for="child in node.children"
         :key="child.id"
         :node="child"
         :selected-id="selectedId"
+        :schema-info="schemaInfo"
         @select="$emit('select', $event)"
         @toggle="$emit('toggle', $event)"
         @edit="$emit('edit', $event)"
@@ -157,6 +188,7 @@ import type { XmlNode } from '@/types/xml';
 const props = defineProps<{
   node: XmlNode;
   selectedId: string | null;
+  schemaInfo?: any;
 }>();
 
 // Emits
@@ -185,6 +217,49 @@ watch(() => props.node.value, (newValue) => {
 const isSelected = computed(() => {
   return props.selectedId === props.node.id;
 });
+
+const isSimpleElement = computed(() => {
+  if (props.node.type !== 'element') return false;
+  
+  // Check if all children are either text nodes or attribute nodes
+  const nonAttributeChildren = props.node.children.filter(child => child.type !== 'attribute');
+  const hasOnlyTextChild = nonAttributeChildren.length === 1 && nonAttributeChildren[0].type === 'text';
+  
+  // If it already has only text content, it's simple
+  if (hasOnlyTextChild) return true;
+  
+  // If no children yet, check if it should be simple based on schema
+  if (nonAttributeChildren.length === 0 && props.schemaInfo) {
+    // Find the schema element definition
+    const schemaElement = findSchemaElement(props.node.name || '', props.schemaInfo.elements);
+    if (schemaElement) {
+      // It's simple if it has a type but no children in the schema
+      return schemaElement.type && !schemaElement.children;
+    }
+  }
+  
+  return false;
+});
+
+const getSimpleElementValue = (): string => {
+  if (!isSimpleElement.value) return '';
+  const textChild = props.node.children.find(child => child.type === 'text');
+  return textChild?.value || '';
+};
+
+// Helper function to find schema element definition
+const findSchemaElement = (elementName: string, elements: any[]): any => {
+  for (const element of elements) {
+    if (element.name === elementName) {
+      return element;
+    }
+    if (element.children) {
+      const found = findSchemaElement(elementName, element.children);
+      if (found) return found;
+    }
+  }
+  return null;
+};
 
 // Methods
 const handleNodeClick = () => {
@@ -277,10 +352,16 @@ const getAttributeType = (): string => {
 
 // Inline editing methods
 const startInlineEdit = async () => {
-  if (!['text', 'comment', 'cdata', 'attribute'].includes(props.node.type)) return;
+  if (!['text', 'comment', 'cdata', 'attribute'].includes(props.node.type) && !isSimpleElement.value) return;
   
   isEditing.value = true;
-  editingValue.value = props.node.value || '';
+  
+  if (isSimpleElement.value) {
+    editingValue.value = getSimpleElementValue();
+  } else {
+    editingValue.value = props.node.value || '';
+  }
+  
   validationError.value = null;
   
   await nextTick();
@@ -296,11 +377,16 @@ const finishInlineEdit = () => {
   
   const newValue = editingValue.value.trim();
   
-  // For text nodes, remove if empty; for comments and CDATA, keep even if empty
-  if (props.node.type === 'text' && newValue === '') {
-    emit('edit', { nodeId: props.node.id, field: 'remove', value: null });
+  if (isSimpleElement.value) {
+    // For simple elements, emit a special edit that creates text child if needed
+    emit('edit', { nodeId: props.node.id, field: 'simpleElementValue', value: newValue });
   } else {
-    emit('edit', { nodeId: props.node.id, field: 'value', value: newValue });
+    // For text nodes, remove if empty; for comments and CDATA, keep even if empty
+    if (props.node.type === 'text' && newValue === '') {
+      emit('edit', { nodeId: props.node.id, field: 'remove', value: null });
+    } else {
+      emit('edit', { nodeId: props.node.id, field: 'value', value: newValue });
+    }
   }
   
   isEditing.value = false;
@@ -516,6 +602,55 @@ const cancelInlineEdit = () => {
 
 .node-icon.processing-instruction {
   color: #e74c3c;
+}
+
+/* Simple element styling */
+.simple-element {
+  color: #2c3e50;
+  font-family: 'Courier New', monospace;
+  background-color: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.simple-element:hover {
+  background-color: #e9ecef;
+  border-color: #3498db;
+}
+
+.simple-element-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background-color: #fff;
+  border: 2px solid #3498db;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-family: 'Courier New', monospace;
+}
+
+.element-name {
+  color: #3498db;
+  font-weight: bold;
+}
+
+.element-value-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  color: #2c3e50;
+  min-width: 50px;
+  max-width: 200px;
+}
+
+.element-value-input:focus {
+  background-color: #f8f9fa;
+  border-radius: 2px;
 }
 
 /* Hover effects */

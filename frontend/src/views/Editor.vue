@@ -242,6 +242,22 @@ const selectDocument = async (doc: XmlDocument) => {
       initialTreeContent.value = fullDoc.content;
     }
     
+    // Parse XML content to XmlNode for tree editor
+    if (fullDoc.content.trim()) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(fullDoc.content, 'text/xml');
+        if (doc.documentElement) {
+          initialTreeNode.value = domNodeToXmlNode(doc.documentElement);
+        }
+      } catch (error) {
+        console.warn('Failed to parse XML for tree editor:', error);
+        initialTreeNode.value = null;
+      }
+    } else {
+      initialTreeNode.value = null;
+    }
+    
     if (editor) {
       editor.setValue(xmlContent.value);
     }
@@ -349,6 +365,81 @@ const createElementXML = (element: any, indentLevel: number = 0, isRoot: boolean
 const generateId = (): string => {
   return Math.random().toString(36).substr(2, 9);
 };
+
+const domNodeToXmlNode = (domNode: Node, parentId?: string): XmlNode => {
+  const id = generateId();
+  const node: XmlNode = {
+    id,
+    type: getNodeType(domNode),
+    children: [],
+    parent: parentId,
+    expanded: true
+  };
+
+  if (domNode.nodeType === Node.ELEMENT_NODE) {
+    const element = domNode as Element;
+    node.name = element.tagName;
+    
+    // Convert attributes to attribute nodes
+    for (let i = 0; i < element.attributes.length; i++) {
+      const attr = element.attributes[i];
+      const attributeNode: XmlNode = {
+        id: generateId(),
+        type: 'attribute',
+        name: attr.name,
+        value: attr.value,
+        children: [],
+        parent: id
+      };
+      node.children.push(attributeNode);
+    }
+  } else if (domNode.nodeType === Node.TEXT_NODE || domNode.nodeType === Node.CDATA_SECTION_NODE) {
+    node.value = domNode.textContent || '';
+  } else if (domNode.nodeType === Node.COMMENT_NODE) {
+    node.value = domNode.textContent || '';
+  }
+
+  // Process children
+  for (let i = 0; i < domNode.childNodes.length; i++) {
+    const child = domNode.childNodes[i];
+    if (shouldIncludeNode(child)) {
+      const childNode = domNodeToXmlNode(child, id);
+      node.children.push(childNode);
+    }
+  }
+
+  return node;
+};
+
+const getNodeType = (domNode: Node): XmlNode['type'] => {
+  switch (domNode.nodeType) {
+    case Node.ELEMENT_NODE:
+      return 'element';
+    case Node.TEXT_NODE:
+      return 'text';
+    case Node.COMMENT_NODE:
+      return 'comment';
+    case Node.CDATA_SECTION_NODE:
+      return 'cdata';
+    case Node.PROCESSING_INSTRUCTION_NODE:
+      return 'processing-instruction';
+    default:
+      return 'text';
+  }
+};
+
+const shouldIncludeNode = (domNode: Node): boolean => {
+  // Include all node types except whitespace-only text nodes
+  if (domNode.nodeType === Node.TEXT_NODE) {
+    const text = domNode.textContent || '';
+    // Include text nodes that have content OR are empty (for editing)
+    // Only exclude whitespace-only text nodes
+    return text.trim().length > 0 || text.length === 0;
+  }
+  // Include all other node types (elements, comments, CDATA, etc.)
+  return true;
+};
+
 
 
 const createElementWithRequiredContent = (schemaElement: SchemaElement, parentId: string): XmlNode => {

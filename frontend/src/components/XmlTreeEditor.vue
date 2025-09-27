@@ -135,6 +135,7 @@
         <XmlTreeNode
           :node="treeState.root"
           :selected-id="treeState.selectedNodeId"
+          :schema-info="schemaInfo"
           @select="selectNode"
           @toggle="toggleNode"
           @edit="editNode"
@@ -327,6 +328,18 @@ const canHaveChildren = (node: XmlNode): boolean => {
   return node.type === 'element';
 };
 
+/**
+ * Check if an element is a simple element (only contains text content, no child elements)
+ */
+const isSimpleElement = (node: XmlNode): boolean => {
+  if (node.type !== 'element') return false;
+  
+  // Check if all children are either text nodes or attribute nodes
+  const nonAttributeChildren = node.children.filter(child => child.type !== 'attribute');
+  return nonAttributeChildren.length === 1 && nonAttributeChildren[0].type === 'text';
+};
+
+
 
 
 
@@ -411,42 +424,66 @@ const editNode = (editData: { nodeId: string; field: string; value: any }) => {
   if (field === 'remove') {
     // Remove the node (for empty text nodes)
     removeNode(nodeId);
+  } else if (field === 'simpleElementValue') {
+    // Handle simple element value editing - create text child if needed
+    let textChild = node.children.find(child => child.type === 'text');
+    if (!textChild) {
+      // Create text child if it doesn't exist
+      textChild = {
+        id: generateId(),
+        type: 'text',
+        value: value,
+        parent: node.id,
+        children: []
+      };
+      node.children.push(textChild);
+    } else {
+      textChild.value = value;
+    }
   } else if (field === 'value') {
-    // Validate value based on node type and schema
-    let validationResult = { valid: true };
-    
-    if (node.type === 'attribute') {
-      // Find the schema attribute definition
-      const parentElement = findNodeById(treeState.value.root!, node.parent!);
-      if (parentElement && props.schemaInfo) {
-        const schemaElement = findSchemaElement(parentElement.name || '', props.schemaInfo.elements);
-        if (schemaElement && schemaElement.attributes) {
-          const schemaAttr = schemaElement.attributes.find(attr => attr.name === node.name);
-          if (schemaAttr) {
-            validationResult = validateValue(value, schemaAttr.type);
+    // Handle simple element value editing
+    if (isSimpleElement(node)) {
+      const textChild = node.children.find(child => child.type === 'text');
+      if (textChild) {
+        textChild.value = value;
+      }
+    } else {
+      // Validate value based on node type and schema
+      let validationResult = { valid: true };
+      
+      if (node.type === 'attribute') {
+        // Find the schema attribute definition
+        const parentElement = findNodeById(treeState.value.root!, node.parent!);
+        if (parentElement && props.schemaInfo) {
+          const schemaElement = findSchemaElement(parentElement.name || '', props.schemaInfo.elements);
+          if (schemaElement && schemaElement.attributes) {
+            const schemaAttr = schemaElement.attributes.find(attr => attr.name === node.name);
+            if (schemaAttr) {
+              validationResult = validateValue(value, schemaAttr.type);
+            }
+          }
+        }
+      } else if (node.type === 'text') {
+        // Find the schema element definition for text content
+        const parentElement = findNodeById(treeState.value.root!, node.parent!);
+        if (parentElement && props.schemaInfo) {
+          const schemaElement = findSchemaElement(parentElement.name || '', props.schemaInfo.elements);
+          if (schemaElement) {
+            validationResult = validateValue(value, schemaElement.type);
           }
         }
       }
-    } else if (node.type === 'text') {
-      // Find the schema element definition for text content
-      const parentElement = findNodeById(treeState.value.root!, node.parent!);
-      if (parentElement && props.schemaInfo) {
-        const schemaElement = findSchemaElement(parentElement.name || '', props.schemaInfo.elements);
-        if (schemaElement) {
-          validationResult = validateValue(value, schemaElement.type);
-        }
+      
+      if (!validationResult.valid) {
+        // Show validation error (you could emit an event or show a toast)
+        console.warn('Validation error:', (validationResult as any).error);
+        // For now, we'll still allow the edit but log the warning
+        // In a real app, you might want to prevent the edit or show an error message
       }
+      
+      // Update the node property
+      (node as any)[field] = value;
     }
-    
-    if (!validationResult.valid) {
-      // Show validation error (you could emit an event or show a toast)
-      console.warn('Validation error:', (validationResult as any).error);
-      // For now, we'll still allow the edit but log the warning
-      // In a real app, you might want to prevent the edit or show an error message
-    }
-    
-    // Update the node property
-    (node as any)[field] = value;
   } else {
     // Update the node property
     (node as any)[field] = value;
