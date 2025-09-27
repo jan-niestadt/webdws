@@ -735,69 +735,23 @@ const addSelectedElement = (element: SchemaElement) => {
     parent: selectedNode.value.id
   };
   
-  // Add required attributes automatically as attribute nodes
-  if (element.attributes) {
-    for (const attr of element.attributes) {
-      if (attr.use === 'required') {
-        const attributeNode: XmlNode = {
-          id: generateId(),
-          type: 'attribute',
-          name: attr.name,
-          value: getDefaultAttributeValue(attr),
-          children: [],
-          parent: newElement.id
-        };
-        newElement.children.push(attributeNode);
-      }
+  // Add default text content if element has a simple type
+  if (element.type && !element.children) {
+    const textContent = getDefaultTextContent(element);
+    if (textContent) {
+      const textNode: XmlNode = {
+        id: generateId(),
+        type: 'text',
+        value: textContent,
+        children: [],
+        parent: newElement.id
+      };
+      newElement.children.push(textNode);
     }
   }
   
-  // Add required child elements automatically
-  if (element.children) {
-    for (const childElement of element.children) {
-      if (childElement.minOccurs > 0) {
-        const requiredChild: XmlNode = {
-          id: generateId(),
-          type: 'element',
-          name: childElement.name,
-          children: [],
-          parent: newElement.id
-        };
-        
-        // Add required attributes to child elements as attribute nodes
-        if (childElement.attributes) {
-          for (const attr of childElement.attributes) {
-            if (attr.use === 'required') {
-              const attributeNode: XmlNode = {
-                id: generateId(),
-                type: 'attribute',
-                name: attr.name,
-                value: getDefaultAttributeValue(attr),
-                children: [],
-                parent: requiredChild.id
-              };
-              requiredChild.children.push(attributeNode);
-            }
-          }
-        }
-        
-        // Add default text content for elements that typically need it
-        const defaultText = getDefaultTextContent(childElement);
-        if (defaultText) {
-          const textNode: XmlNode = {
-            id: generateId(),
-            type: 'text',
-            value: defaultText,
-            children: [],
-            parent: requiredChild.id
-          };
-          requiredChild.children.push(textNode);
-        }
-        
-        newElement.children.push(requiredChild);
-      }
-    }
-  }
+  // Use unified function to add all required content
+  addRequiredContentToElement(newElement, element);
   
   addChildNode(selectedNode.value.id, newElement);
   selectNode(newElement.id);
@@ -818,12 +772,12 @@ const countChildElements = (parentNode: XmlNode, elementName: string): number =>
 };
 
 const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
-  // Use default value if specified
+  // Use default value if specified in schema
   if (attr.defaultValue) {
     return attr.defaultValue;
   }
   
-  // Use fixed value if specified
+  // Use fixed value if specified in schema
   if (attr.fixedValue) {
     return attr.fixedValue;
   }
@@ -930,7 +884,17 @@ const hideAttributeDropdown = () => {
 };
 
 const getDefaultTextContent = (element: SchemaElement): string => {
-  // Generate type-based defaults for text content
+  // Use default value if specified in schema
+  if (element.defaultValue) {
+    return element.defaultValue;
+  }
+  
+  // Use fixed value if specified in schema
+  if (element.fixedValue) {
+    return element.fixedValue;
+  }
+  
+  // Generate type-based defaults for text content (but not for date fields)
   const type = element.type.toLowerCase();
   
   if (type.includes('boolean')) {
@@ -945,16 +909,108 @@ const getDefaultTextContent = (element: SchemaElement): string => {
     return '0';
   }
   
-  if (type.includes('date')) {
-    return new Date().toISOString().split('T')[0];
-  }
+  // Don't provide defaults for date fields - leave them empty
+  // if (type.includes('date')) {
+  //   return new Date().toISOString().split('T')[0];
+  // }
   
-  if (type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
+  // if (type.includes('year')) {
+  //   return new Date().getFullYear().toString();
+  // }
   
   // For strings and other types, return empty string
   return '';
+};
+
+// Unified function to create required content for any element
+const createRequiredContent = (schemaElement: SchemaElement, parentId: string): { attributes: XmlNode[], children: XmlNode[] } => {
+  const attributes: XmlNode[] = [];
+  const children: XmlNode[] = [];
+  
+  // Create required attributes
+  if (schemaElement.attributes) {
+    for (const attr of schemaElement.attributes) {
+      if (attr.use === 'required') {
+        const attrNode: XmlNode = {
+          id: generateId(),
+          type: 'attribute',
+          name: attr.name,
+          value: getDefaultAttributeValue(attr),
+          parent: parentId,
+          children: []
+        };
+        attributes.push(attrNode);
+      }
+    }
+  }
+  
+  // Create required child elements
+  if (schemaElement.children) {
+    for (const childSchema of schemaElement.children) {
+      if (childSchema.minOccurs > 0) {
+        for (let i = 0; i < childSchema.minOccurs; i++) {
+          const childNode: XmlNode = {
+            id: generateId(),
+            type: 'element',
+            name: childSchema.name,
+            value: '',
+            parent: parentId,
+            children: []
+          };
+          
+          // Add default text content if element has a simple type
+          if (childSchema.type && !childSchema.children) {
+            const textContent = getDefaultTextContent(childSchema);
+            if (textContent) {
+              const textNode: XmlNode = {
+                id: generateId(),
+                type: 'text',
+                value: textContent,
+                parent: childNode.id,
+                children: []
+              };
+              childNode.children.push(textNode);
+            }
+          } else if (childSchema.children) {
+            // Recursively create required content for complex children
+            const childContent = createRequiredContent(childSchema, childNode.id);
+            childNode.children.push(...childContent.attributes, ...childContent.children);
+          }
+          
+          children.push(childNode);
+        }
+      }
+    }
+  }
+  
+  return { attributes, children };
+};
+
+// Unified function to add required content to any element
+const addRequiredContentToElement = (parentNode: XmlNode, schemaElement: SchemaElement) => {
+  // Create all required content
+  const requiredContent = createRequiredContent(schemaElement, parentNode.id);
+  
+  // Add required attributes (only if they don't already exist)
+  for (const attrNode of requiredContent.attributes) {
+    const existingAttr = parentNode.children.find(child => 
+      child.type === 'attribute' && child.name === attrNode.name
+    );
+    
+    if (!existingAttr) {
+      parentNode.children.push(attrNode);
+    }
+  }
+  
+  // Add required child elements (only if we don't have enough)
+  for (const childNode of requiredContent.children) {
+    const existingCount = countChildElements(parentNode, childNode.name || '');
+    const requiredCount = schemaElement.children?.find(c => c.name === childNode.name)?.minOccurs || 0;
+    
+    if (existingCount < requiredCount) {
+      parentNode.children.push(childNode);
+    }
+  }
 };
 
 // Type validation functions

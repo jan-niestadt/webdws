@@ -290,6 +290,142 @@ const saveDocument = async () => {
   }
 };
 
+// Helper function to get default attribute value
+const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; fixedValue?: string }): string => {
+  // Use default value if specified in schema
+  if (attr.defaultValue) {
+    return attr.defaultValue;
+  }
+  
+  // Use fixed value if specified in schema
+  if (attr.fixedValue) {
+    return attr.fixedValue;
+  }
+  
+  // Generate type-based defaults
+  const type = attr.type.toLowerCase();
+  
+  if (type.includes('boolean')) {
+    return 'false';
+  }
+  
+  if (type.includes('int') && !type.includes('string')) {
+    return '0';
+  }
+  
+  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
+    return '0';
+  }
+  
+  if (type.includes('date')) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  if (type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
+  
+  // For strings and other types, return empty string
+  return '';
+};
+
+// Helper function to get default text content
+const getDefaultTextContent = (element: any): string => {
+  // Use default value if specified in schema
+  if (element.defaultValue) {
+    return element.defaultValue;
+  }
+  
+  // Use fixed value if specified in schema
+  if (element.fixedValue) {
+    return element.fixedValue;
+  }
+  
+  // Generate type-based defaults for text content (but not for date fields)
+  const type = element.type.toLowerCase();
+  
+  if (type.includes('boolean')) {
+    return 'false';
+  }
+  
+  if (type.includes('int') && !type.includes('string')) {
+    return '0';
+  }
+  
+  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
+    return '0';
+  }
+  
+  // Don't provide defaults for date fields - leave them empty
+  // if (type.includes('date')) {
+  //   return new Date().toISOString().split('T')[0];
+  // }
+  
+  // if (type.includes('year')) {
+  //   return new Date().getFullYear().toString();
+  // }
+  
+  // For strings and other types, return empty string
+  return '';
+};
+
+// Unified function to create XML element with required content
+const createElementXML = (element: any, indentLevel: number = 0, isRoot: boolean = false): string => {
+  const indent = '  '.repeat(indentLevel);
+  
+  let xml = '';
+  
+  // Add XML declaration for root element
+  if (isRoot) {
+    xml += '<?xml version="1.0" encoding="UTF-8"?>\n';
+  }
+  
+  // Start element tag
+  xml += `${indent}<${element.name}`;
+  
+  // Add required attributes
+  if (element.attributes) {
+    for (const attr of element.attributes) {
+      if (attr.use === 'required') {
+        const value = getDefaultAttributeValue(attr);
+        xml += ` ${attr.name}="${value}"`;
+      }
+    }
+  }
+  
+  xml += '>';
+  
+  // Add default text content if element has a simple type
+  if (element.type && !element.children) {
+    const textContent = getDefaultTextContent(element);
+    if (textContent) {
+      xml += textContent;
+    }
+  } else if (element.children) {
+    // Add required child elements recursively
+    for (const child of element.children) {
+      if (child.minOccurs > 0) {
+        xml += createElementXML(child, indentLevel + 1);
+      }
+    }
+  }
+  
+  // Close element tag
+  xml += `</${element.name}>`;
+  
+  // Add newline for non-root elements
+  if (!isRoot) {
+    xml += '\n';
+  }
+  
+  return xml;
+};
+
+// Helper function to create root element with required content
+const createRootElementWithRequiredContent = (rootElement: any): string => {
+  return createElementXML(rootElement, 0, true);
+};
+
 // Create new document
 const newDocument = () => {
   selectedDocument.value = null;
@@ -297,7 +433,12 @@ const newDocument = () => {
   
   // Use schema root element if available, otherwise fallback to 'root'
   const rootElementName = rootElement.value?.name || 'root';
-  const newXml = `<?xml version="1.0" encoding="UTF-8"?>\n<${rootElementName}></${rootElementName}>`;
+  let newXml = `<?xml version="1.0" encoding="UTF-8"?>\n<${rootElementName}></${rootElementName}>`;
+  
+  // If schema is available, create a more complete root element with required content
+  if (rootElement.value && schemaInfo.value) {
+    newXml = createRootElementWithRequiredContent(rootElement.value);
+  }
   
   // Format XML content if in text mode
   if (editorMode.value === 'text') {

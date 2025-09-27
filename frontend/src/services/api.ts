@@ -21,6 +21,8 @@ export interface SchemaElement {
   children?: SchemaElement[];
   attributes?: SchemaAttribute[];
   properties?: Record<string, any>;
+  defaultValue?: string;
+  fixedValue?: string;
 }
 
 export interface SchemaAttribute {

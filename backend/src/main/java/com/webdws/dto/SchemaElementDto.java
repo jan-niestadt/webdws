@@ -24,6 +24,8 @@ public class SchemaElementDto {
     private List<SchemaElementDto> children;
     private List<SchemaAttributeDto> attributes;
     private Map<String, Object> properties;
+    private String defaultValue;
+    private String fixedValue;
     
     public SchemaElementDto() {}
     
@@ -109,5 +111,21 @@ public class SchemaElementDto {
     
     public void setProperties(Map<String, Object> properties) {
         this.properties = properties;
+    }
+    
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+    
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
+    }
+    
+    public String getFixedValue() {
+        return fixedValue;
+    }
+    
+    public void setFixedValue(String fixedValue) {
+        this.fixedValue = fixedValue;
     }
 }

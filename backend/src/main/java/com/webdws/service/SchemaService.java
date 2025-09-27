@@ -108,6 +108,17 @@ public class SchemaService {
             element.setType(type);
         }
         
+        // Parse default and fixed values
+        String defaultValue = elementNode.getAttribute("default");
+        if (!defaultValue.isEmpty()) {
+            element.setDefaultValue(defaultValue);
+        }
+        
+        String fixedValue = elementNode.getAttribute("fixed");
+        if (!fixedValue.isEmpty()) {
+            element.setFixedValue(fixedValue);
+        }
+        
         // Parse complex type if present
         Element complexType = getFirstChildElement(elementNode, "complexType");
         if (complexType != null) {
