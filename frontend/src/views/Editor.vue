@@ -105,6 +105,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { xmlApi } from '@/services/api';
 import type { XmlDocument, SaveXmlRequest } from '@/types/xml';
+import { xmlService } from '@/services/xmlService';
 import * as monaco from 'monaco-editor';
 import XmlTreeEditor from '@/components/XmlTreeEditor.vue';
 
@@ -193,11 +194,25 @@ const selectDocument = async (doc: XmlDocument) => {
     const fullDoc = await xmlApi.getDocument(doc.id);
     selectedDocument.value = fullDoc;
     documentName.value = fullDoc.name;
-    xmlContent.value = fullDoc.content;
-    initialTreeContent.value = fullDoc.content;
+    
+    // Format XML content if in text mode
+    if (editorMode.value === 'text' && fullDoc.content.trim()) {
+      try {
+        const formattedXml = xmlService.formatXml(fullDoc.content);
+        xmlContent.value = formattedXml;
+        initialTreeContent.value = fullDoc.content; // Keep original for tree mode
+      } catch (error) {
+        console.warn('Failed to format loaded XML:', error);
+        xmlContent.value = fullDoc.content;
+        initialTreeContent.value = fullDoc.content;
+      }
+    } else {
+      xmlContent.value = fullDoc.content;
+      initialTreeContent.value = fullDoc.content;
+    }
     
     if (editor) {
-      editor.setValue(fullDoc.content);
+      editor.setValue(xmlContent.value);
     }
     
     isModified.value = false;
@@ -254,8 +269,22 @@ const saveDocument = async () => {
 const newDocument = () => {
   selectedDocument.value = null;
   documentName.value = '';
-  xmlContent.value = '<?xml version="1.0" encoding="UTF-8"?>\n<root></root>';
-  initialTreeContent.value = xmlContent.value;
+  const newXml = '<?xml version="1.0" encoding="UTF-8"?>\n<root></root>';
+  
+  // Format XML content if in text mode
+  if (editorMode.value === 'text') {
+    try {
+      xmlContent.value = xmlService.formatXml(newXml);
+      initialTreeContent.value = newXml; // Keep original for tree mode
+    } catch (error) {
+      console.warn('Failed to format new XML:', error);
+      xmlContent.value = newXml;
+      initialTreeContent.value = newXml;
+    }
+  } else {
+    xmlContent.value = newXml;
+    initialTreeContent.value = newXml;
+  }
   
   if (editor) {
     editor.setValue(xmlContent.value);
@@ -335,7 +364,19 @@ const setMode = async (mode: 'text' | 'tree') => {
       editor = null;
     }
     
-    // Reinitialize the editor with current content (read-only)
+    // Format XML content for pretty printing
+    if (xmlContent.value.trim()) {
+      try {
+        const formattedXml = xmlService.formatXml(xmlContent.value);
+        xmlContent.value = formattedXml;
+        console.log('Formatted XML for text view:', formattedXml.substring(0, 100) + '...');
+      } catch (error) {
+        console.warn('Failed to format XML:', error);
+        // Continue with unformatted XML if formatting fails
+      }
+    }
+    
+    // Reinitialize the editor with formatted content (read-only)
     console.log('Initializing XML view with content:', xmlContent.value.substring(0, 100) + '...');
     await initEditor();
   } else {

@@ -129,18 +129,39 @@ export class XmlService {
    */
   public formatXml(xmlString: string): string {
     try {
-      const parseResult = this.parseXml(xmlString);
+      // Trim whitespace and normalize line endings
+      const trimmedXml = xmlString.trim();
+      if (!trimmedXml) {
+        return xmlString;
+      }
+
+      const parseResult = this.parseXml(trimmedXml);
       if (!parseResult.success || !parseResult.document) {
         return xmlString;
       }
 
-      // Simple formatting - can be enhanced with SaxonJS
+      // Use SaxonJS for better formatting if available
+      if (typeof SaxonJS !== 'undefined') {
+        try {
+          return SaxonJS.serialize(parseResult.document, {
+            method: 'xml',
+            indent: true,
+            'omit-xml-declaration': false,
+            'suppress-indentation': false
+          });
+        } catch (saxonError) {
+          console.warn('SaxonJS formatting failed, falling back to basic formatting:', saxonError);
+        }
+      }
+
+      // Fallback to basic formatting
       const serializer = new XMLSerializer();
       const formatted = serializer.serializeToString(parseResult.document);
       
       // Basic indentation
       return this.indentXml(formatted);
     } catch (error) {
+      console.warn('XML formatting failed:', error);
       return xmlString;
     }
   }
@@ -155,21 +176,34 @@ export class XmlService {
     let pad = 0;
 
     formatted = formatted.split('\n').map((node) => {
+      const trimmedNode = node.trim();
+      if (!trimmedNode) {
+        return ''; // Remove empty lines
+      }
+
       let indent = 0;
-      if (node.match(/.+<\/\w[^>]*>$/)) {
+      if (trimmedNode.match(/.+<\/\w[^>]*>$/)) {
+        // Closing tag
         indent = 0;
-      } else if (node.match(/^<\/\w/) && pad > 0) {
+      } else if (trimmedNode.match(/^<\/\w/) && pad > 0) {
+        // Closing tag - reduce indentation
         pad -= 1;
-      } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) {
+        indent = 0;
+      } else if (trimmedNode.match(/^<\w[^>]*[^\/]>.*$/)) {
+        // Opening tag
         indent = 1;
+      } else if (trimmedNode.match(/^<\w[^>]*\/>.*$/)) {
+        // Self-closing tag
+        indent = 0;
       } else {
+        // Other content (text, comments, etc.)
         indent = 0;
       }
 
       const padding = PADDING.repeat(pad);
       pad += indent;
-      return padding + node;
-    }).join('\n');
+      return padding + trimmedNode;
+    }).filter(line => line.trim() !== '').join('\n');
 
     return formatted;
   }
