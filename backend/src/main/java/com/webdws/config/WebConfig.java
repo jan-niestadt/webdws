@@ -19,8 +19,6 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/static/**")
                 .addResourceLocations("classpath:/static/");
         
-        // Serve schema files directly from /schema path
-        registry.addResourceHandler("/schema/**")
-                .addResourceLocations("classpath:/static/schema/");
+        // Schema files are served via SchemaController, not as static resources
     }
 }

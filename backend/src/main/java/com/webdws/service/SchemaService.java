@@ -33,6 +33,8 @@ public class SchemaService {
      * Load and parse the default XML schema
      */
     public SchemaInfoDto loadDefaultSchema() throws Exception {
+        System.out.println("DEBUG: SchemaService.loadDefaultSchema() called");
+        System.out.println("DEBUG: Loading schema from path: " + DEFAULT_SCHEMA_PATH);
         return loadSchema(DEFAULT_SCHEMA_PATH);
     }
     
@@ -40,14 +42,26 @@ public class SchemaService {
      * Load and parse an XML schema from the classpath
      */
     public SchemaInfoDto loadSchema(String schemaPath) throws Exception {
-        try (InputStream inputStream = new ClassPathResource(schemaPath).getInputStream()) {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document document = builder.parse(inputStream);
+        System.out.println("DEBUG: SchemaService.loadSchema() called with path: " + schemaPath);
+        try {
+            ClassPathResource resource = new ClassPathResource(schemaPath);
+            System.out.println("DEBUG: ClassPathResource created for: " + schemaPath);
+            System.out.println("DEBUG: Resource exists: " + resource.exists());
+            System.out.println("DEBUG: Resource description: " + resource.getDescription());
             
-            return parseSchemaDocument(document);
+            try (InputStream inputStream = resource.getInputStream()) {
+                System.out.println("DEBUG: Successfully opened input stream");
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setNamespaceAware(true);
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document document = builder.parse(inputStream);
+                
+                System.out.println("DEBUG: Successfully parsed XML document");
+                return parseSchemaDocument(document);
+            }
         } catch (IOException | ParserConfigurationException | SAXException e) {
+            System.err.println("DEBUG: Error loading schema from " + schemaPath + ": " + e.getMessage());
+            e.printStackTrace();
             throw new Exception("Failed to load schema: " + e.getMessage(), e);
         }
     }
@@ -110,12 +124,12 @@ public class SchemaService {
         
         // Parse default and fixed values
         String defaultValue = elementNode.getAttribute("default");
-        if (!defaultValue.isEmpty()) {
+        if (defaultValue != null && !defaultValue.isEmpty()) {
             element.setDefaultValue(defaultValue);
         }
         
         String fixedValue = elementNode.getAttribute("fixed");
-        if (!fixedValue.isEmpty()) {
+        if (fixedValue != null && !fixedValue.isEmpty()) {
             element.setFixedValue(fixedValue);
         }
         

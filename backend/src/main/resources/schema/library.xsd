@@ -14,7 +14,7 @@
               <xs:element name="title" type="xs:string"/>
               <xs:element name="author" type="xs:string"/>
               <xs:element name="isbn" type="xs:string"/>
-              <xs:element name="genre" type="xs:string"/>
+              <xs:element name="genre" type="xs:string" default="Unknown genre"/>
               <xs:element name="published" type="xs:gYear"/>
               <xs:element name="description" type="xs:string" minOccurs="0"/>
             </xs:sequence>

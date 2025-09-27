@@ -11,7 +11,7 @@ spring:
     name: webdws-backend
   
   profiles:
-    active: docker
+    active: test
   
   # Database Configuration - PostgreSQL for metadata storage
   datasource:

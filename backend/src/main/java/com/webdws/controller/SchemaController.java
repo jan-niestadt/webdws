@@ -31,10 +31,14 @@ public class SchemaController {
      */
     @GetMapping("/default")
     public ResponseEntity<ApiResponse<SchemaInfoDto>> getDefaultSchema() {
+        System.out.println("DEBUG: SchemaController.getDefaultSchema() called");
         try {
             SchemaInfoDto schema = schemaService.loadDefaultSchema();
+            System.out.println("DEBUG: Successfully loaded schema, returning response");
             return ResponseEntity.ok(ApiResponse.success(schema));
         } catch (Exception e) {
+            System.err.println("DEBUG: Error in getDefaultSchema(): " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Failed to load default schema: " + e.getMessage()));
         }
