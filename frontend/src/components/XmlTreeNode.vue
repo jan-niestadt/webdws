@@ -49,6 +49,7 @@
         <div 
           v-else-if="node.type === 'attribute' && isEditing"
           class="attribute-edit"
+          :class="{ 'validation-error': validationError }"
           @click.stop
         >
           <span class="attribute-name-display">{{ node.name }}</span>
@@ -58,11 +59,14 @@
             @blur="finishAttributeEdit"
             @keydown.enter.prevent="finishAttributeEdit"
             @keydown.escape.prevent="cancelInlineEdit"
+            @input="validateCurrentValue"
             class="attribute-value-input"
+            :class="{ 'invalid': validationError }"
             ref="valueInput"
             placeholder="attribute value"
-            :title="'Press Enter to save, Escape to cancel'"
+            :title="validationError || 'Press Enter to save, Escape to cancel'"
           />
+          <span v-if="validationError" class="validation-error-message">{{ validationError }}</span>
         </div>
         
         <span 
@@ -165,6 +169,7 @@ const emit = defineEmits<{
 // Reactive state for inline editing
 const isEditing = ref(false);
 const editingValue = ref('');
+const validationError = ref<string | null>(null);
 const editInput = ref<HTMLInputElement | null>(null);
 const valueInput = ref<HTMLInputElement | null>(null);
 
@@ -216,6 +221,59 @@ const getAttributeTitle = (): string => {
   return '';
 };
 
+// Validation function (simplified version for real-time feedback)
+const validateCurrentValue = () => {
+  if (props.node.type === 'attribute') {
+    const value = editingValue.value;
+    const type = getAttributeType(); // We'll need to get this from props or context
+    
+    // Basic validation for common types
+    if (type && type.toLowerCase().includes('boolean')) {
+      const lowerValue = value.toLowerCase();
+      if (value && !['true', 'false', '1', '0'].includes(lowerValue)) {
+        validationError.value = 'Boolean values must be "true", "false", "1", or "0"';
+        return;
+      }
+    } else if (type && type.toLowerCase().includes('int') && !type.toLowerCase().includes('string')) {
+      if (value && !/^-?\d+$/.test(value)) {
+        validationError.value = 'Integer values must contain only digits';
+        return;
+      }
+    } else if (type && (type.toLowerCase().includes('decimal') || type.toLowerCase().includes('float'))) {
+      if (value && !/^-?\d+(\.\d+)?$/.test(value)) {
+        validationError.value = 'Decimal values must be valid numbers';
+        return;
+      }
+    } else if (type && type.toLowerCase().includes('date')) {
+      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        validationError.value = 'Date values must be in YYYY-MM-DD format';
+        return;
+      }
+    } else if (type && type.toLowerCase().includes('year')) {
+      if (value && !/^\d{4}$/.test(value)) {
+        validationError.value = 'Year values must be 4-digit years';
+        return;
+      }
+    }
+    
+    validationError.value = null;
+  }
+};
+
+// Helper to get attribute type (simplified - in a real app you'd pass this as a prop)
+const getAttributeType = (): string => {
+  // This is a simplified version - in practice you'd get this from the schema
+  // For now, we'll return a basic type based on common patterns
+  const name = props.node.name?.toLowerCase() || '';
+  if (name.includes('id')) return 'xs:ID';
+  if (name.includes('available') || name.includes('enabled')) return 'xs:boolean';
+  if (name.includes('count') || name.includes('number')) return 'xs:integer';
+  if (name.includes('price') || name.includes('rate')) return 'xs:decimal';
+  if (name.includes('date') || name.includes('time')) return 'xs:date';
+  if (name.includes('year')) return 'xs:gYear';
+  return 'xs:string';
+};
+
 
 // Inline editing methods
 const startInlineEdit = async () => {
@@ -223,6 +281,7 @@ const startInlineEdit = async () => {
   
   isEditing.value = true;
   editingValue.value = props.node.value || '';
+  validationError.value = null;
   
   await nextTick();
   const inputToFocus = props.node.type === 'attribute' ? valueInput.value : editInput.value;
@@ -251,6 +310,11 @@ const finishInlineEdit = () => {
 const finishAttributeEdit = () => {
   if (!isEditing.value || props.node.type !== 'attribute') return;
   
+  // Don't save if there's a validation error
+  if (validationError.value) {
+    return;
+  }
+  
   const newValue = editingValue.value.trim();
   
   if (newValue !== props.node.value) {
@@ -263,11 +327,13 @@ const finishAttributeEdit = () => {
   
   isEditing.value = false;
   editingValue.value = '';
+  validationError.value = null;
 };
 
 const cancelInlineEdit = () => {
   isEditing.value = false;
   editingValue.value = '';
+  validationError.value = null;
 };
 </script>
 
@@ -406,6 +472,23 @@ const cancelInlineEdit = () => {
 .attribute-equals {
   color: #6c757d;
   font-weight: bold;
+}
+
+.validation-error {
+  border-color: #dc3545 !important;
+}
+
+.attribute-value-input.invalid {
+  border-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+.validation-error-message {
+  display: block;
+  font-size: 0.75rem;
+  color: #dc3545;
+  margin-top: 0.25rem;
+  font-style: italic;
 }
 
 .node-children {

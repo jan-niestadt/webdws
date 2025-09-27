@@ -406,12 +406,42 @@ const editNode = (editData: { nodeId: string; field: string; value: any }) => {
   if (field === 'remove') {
     // Remove the node (for empty text nodes)
     removeNode(nodeId);
-  } else if (field === 'attribute') {
-    // Handle attribute editing
+  } else if (field === 'value') {
+    // Validate value based on node type and schema
+    let validationResult = { valid: true };
+    
     if (node.type === 'attribute') {
-      node.name = value.name;
-      node.value = value.value;
+      // Find the schema attribute definition
+      const parentElement = findNodeById(treeState.value.root!, node.parent!);
+      if (parentElement && props.schemaInfo) {
+        const schemaElement = findSchemaElement(parentElement.name || '', props.schemaInfo.elements);
+        if (schemaElement && schemaElement.attributes) {
+          const schemaAttr = schemaElement.attributes.find(attr => attr.name === node.name);
+          if (schemaAttr) {
+            validationResult = validateValue(value, schemaAttr.type);
+          }
+        }
+      }
+    } else if (node.type === 'text') {
+      // Find the schema element definition for text content
+      const parentElement = findNodeById(treeState.value.root!, node.parent!);
+      if (parentElement && props.schemaInfo) {
+        const schemaElement = findSchemaElement(parentElement.name || '', props.schemaInfo.elements);
+        if (schemaElement) {
+          validationResult = validateValue(value, schemaElement.type);
+        }
+      }
     }
+    
+    if (!validationResult.valid) {
+      // Show validation error (you could emit an event or show a toast)
+      console.warn('Validation error:', (validationResult as any).error);
+      // For now, we'll still allow the edit but log the warning
+      // In a real app, you might want to prevent the edit or show an error message
+    }
+    
+    // Update the node property
+    (node as any)[field] = value;
   } else {
     // Update the node property
     (node as any)[field] = value;
@@ -798,30 +828,30 @@ const getDefaultAttributeValue = (attr: { type: string; defaultValue?: string; f
     return attr.fixedValue;
   }
   
-  // Generate sensible defaults based on type
+  // Generate type-based defaults
   const type = attr.type.toLowerCase();
-  
-  if (type.includes('id')) {
-    return `id_${Date.now()}`;
-  }
   
   if (type.includes('boolean')) {
     return 'false';
   }
   
-  if (type.includes('date') || type.includes('time')) {
-    return new Date().toISOString().split('T')[0];
-  }
-  
-  if (type.includes('number') || type.includes('int') || type.includes('decimal')) {
+  if (type.includes('int') && !type.includes('string')) {
     return '0';
   }
   
-  if (type.includes('string')) {
-    return '';
+  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
+    return '0';
   }
   
-  // Default fallback
+  if (type.includes('date')) {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  if (type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
+  
+  // For strings and other types, return empty string
   return '';
 };
 
@@ -900,51 +930,18 @@ const hideAttributeDropdown = () => {
 };
 
 const getDefaultTextContent = (element: SchemaElement): string => {
-  const name = element.name.toLowerCase();
+  // Generate type-based defaults for text content
   const type = element.type.toLowerCase();
-  
-  // Generate sensible defaults based on element name and type
-  if (name.includes('title')) {
-    return 'Untitled';
-  }
-  
-  if (name.includes('author')) {
-    return 'Unknown Author';
-  }
-  
-  if (name.includes('description')) {
-    return 'No description available';
-  }
-  
-  if (name.includes('name')) {
-    return 'Unnamed';
-  }
-  
-  if (name.includes('isbn')) {
-    return '000-0-000-00000-0';
-  }
-  
-  if (name.includes('genre')) {
-    return 'Unknown';
-  }
-  
-  if (name.includes('published') && type.includes('year')) {
-    return new Date().getFullYear().toString();
-  }
-  
-  if (name.includes('id') || name.includes('identifier')) {
-    return `id_${Date.now()}`;
-  }
-  
-  if (type.includes('string') && !name.includes('id')) {
-    return ''; // Empty string for generic string elements
-  }
   
   if (type.includes('boolean')) {
     return 'false';
   }
   
-  if (type.includes('number') || type.includes('int') || type.includes('decimal')) {
+  if (type.includes('int') && !type.includes('string')) {
+    return '0';
+  }
+  
+  if (type.includes('decimal') || type.includes('float') || type.includes('double')) {
     return '0';
   }
   
@@ -952,8 +949,98 @@ const getDefaultTextContent = (element: SchemaElement): string => {
     return new Date().toISOString().split('T')[0];
   }
   
-  // No default text content
+  if (type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
+  
+  // For strings and other types, return empty string
   return '';
+};
+
+// Type validation functions
+// Helper function to find schema element
+const findSchemaElement = (elementName: string, schemaElements: SchemaElement[]): SchemaElement | null => {
+  for (const element of schemaElements) {
+    if (element.name === elementName) {
+      return element;
+    }
+    if (element.children) {
+      const found = findSchemaElement(elementName, element.children);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+const validateValue = (value: string, type: string): { valid: boolean; error?: string } => {
+  if (!value.trim()) {
+    return { valid: true }; // Empty values are valid (handled by required validation)
+  }
+  
+  const normalizedType = type.toLowerCase();
+  
+  // Boolean validation
+  if (normalizedType.includes('boolean')) {
+    const lowerValue = value.toLowerCase();
+    if (lowerValue === 'true' || lowerValue === 'false' || lowerValue === '1' || lowerValue === '0') {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Boolean values must be "true", "false", "1", or "0"' };
+  }
+  
+  // Integer validation
+  if (normalizedType.includes('int') && !normalizedType.includes('string')) {
+    if (/^-?\d+$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Integer values must contain only digits (optionally with leading minus sign)' };
+  }
+  
+  // Decimal/float validation
+  if (normalizedType.includes('decimal') || normalizedType.includes('float') || normalizedType.includes('double')) {
+    if (/^-?\d+(\.\d+)?$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Decimal values must be valid numbers (e.g., "123.45", "-67.89")' };
+  }
+  
+  // Date validation (basic)
+  if (normalizedType.includes('date')) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return { valid: true };
+      }
+    }
+    return { valid: false, error: 'Date values must be in YYYY-MM-DD format' };
+  }
+  
+  // Year validation
+  if (normalizedType.includes('year')) {
+    if (/^\d{4}$/.test(value)) {
+      const year = parseInt(value);
+      if (year >= 1 && year <= 9999) {
+        return { valid: true };
+      }
+    }
+    return { valid: false, error: 'Year values must be 4-digit years (1-9999)' };
+  }
+  
+  // ID validation
+  if (normalizedType.includes('id')) {
+    if (/^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'ID values must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens' };
+  }
+  
+  // String validation (most permissive)
+  if (normalizedType.includes('string')) {
+    return { valid: true };
+  }
+  
+  // Default: allow any value
+  return { valid: true };
 };
 
 // Click outside handler to close dropdowns

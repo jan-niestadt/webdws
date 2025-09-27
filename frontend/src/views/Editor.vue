@@ -425,22 +425,170 @@ const validateAgainstSchema = async (xmlContent: string): Promise<{ valid: boole
       };
     }
     
-    // Basic schema validation - check required attributes
-    if (expectedRootElement?.attributes) {
-      for (const attr of expectedRootElement.attributes) {
-        if (attr.use === 'required' && !rootElement.hasAttribute(attr.name)) {
+    // Validate the entire document tree
+    const validationResult = validateElementAgainstSchema(rootElement, expectedRootElement, schemaInfo.value);
+    return validationResult;
+  } catch (error) {
+    return { valid: false, error: `Schema validation error: ${error}` };
+  }
+};
+
+// Recursively validate an element and its children against schema
+const validateElementAgainstSchema = (element: Element, schemaElement: any, schemaInfo: any): { valid: boolean; error?: string } => {
+  // Check required attributes
+  if (schemaElement?.attributes) {
+    for (const attr of schemaElement.attributes) {
+      if (attr.use === 'required' && !element.hasAttribute(attr.name)) {
+        return { 
+          valid: false, 
+          error: `Required attribute '${attr.name}' is missing on element '${element.tagName}'` 
+        };
+      }
+      
+      // Validate attribute values if present
+      if (element.hasAttribute(attr.name)) {
+        const attrValue = element.getAttribute(attr.name) || '';
+        const validationResult = validateValue(attrValue, attr.type);
+        if (!validationResult.valid) {
           return { 
             valid: false, 
-            error: `Required attribute '${attr.name}' is missing on element '${rootElement.tagName}'` 
+            error: `Invalid value for attribute '${attr.name}' on element '${element.tagName}': ${validationResult.error}` 
           };
         }
       }
     }
-    
-    return { valid: true };
-  } catch (error) {
-    return { valid: false, error: `Schema validation error: ${error}` };
   }
+  
+  // Validate text content if element has text
+  const textContent = element.textContent?.trim();
+  if (textContent && schemaElement?.type) {
+    const validationResult = validateValue(textContent, schemaElement.type);
+    if (!validationResult.valid) {
+      return { 
+        valid: false, 
+        error: `Invalid text content for element '${element.tagName}': ${validationResult.error}` 
+      };
+    }
+  }
+  
+  // Validate child elements
+  if (schemaElement?.children) {
+    const childElements = Array.from(element.children);
+    const childElementCounts: { [key: string]: number } = {};
+    
+    for (const childElement of childElements) {
+      const childName = childElement.tagName;
+      childElementCounts[childName] = (childElementCounts[childName] || 0) + 1;
+      
+      // Find schema definition for this child
+      const childSchema = schemaElement.children.find((child: any) => child.name === childName);
+      if (!childSchema) {
+        return { 
+          valid: false, 
+          error: `Element '${childName}' is not allowed as child of '${element.tagName}'` 
+        };
+      }
+      
+      // Check occurrence constraints
+      if (childElementCounts[childName] > childSchema.maxOccurs) {
+        return { 
+          valid: false, 
+          error: `Element '${childName}' appears too many times (max: ${childSchema.maxOccurs})` 
+        };
+      }
+      
+      // Recursively validate child element
+      const childValidation = validateElementAgainstSchema(childElement, childSchema, schemaInfo);
+      if (!childValidation.valid) {
+        return childValidation;
+      }
+    }
+    
+    // Check minimum occurrences
+    for (const childSchema of schemaElement.children) {
+      const actualCount = childElementCounts[childSchema.name] || 0;
+      if (actualCount < childSchema.minOccurs) {
+        return { 
+          valid: false, 
+          error: `Element '${childSchema.name}' must appear at least ${childSchema.minOccurs} times (found: ${actualCount})` 
+        };
+      }
+    }
+  }
+  
+  return { valid: true };
+};
+
+// Type validation function (same as in XmlTreeEditor)
+const validateValue = (value: string, type: string): { valid: boolean; error?: string } => {
+  if (!value.trim()) {
+    return { valid: true }; // Empty values are valid (handled by required validation)
+  }
+  
+  const normalizedType = type.toLowerCase();
+  
+  // Boolean validation
+  if (normalizedType.includes('boolean')) {
+    const lowerValue = value.toLowerCase();
+    if (lowerValue === 'true' || lowerValue === 'false' || lowerValue === '1' || lowerValue === '0') {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Boolean values must be "true", "false", "1", or "0"' };
+  }
+  
+  // Integer validation
+  if (normalizedType.includes('int') && !normalizedType.includes('string')) {
+    if (/^-?\d+$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Integer values must contain only digits (optionally with leading minus sign)' };
+  }
+  
+  // Decimal/float validation
+  if (normalizedType.includes('decimal') || normalizedType.includes('float') || normalizedType.includes('double')) {
+    if (/^-?\d+(\.\d+)?$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Decimal values must be valid numbers (e.g., "123.45", "-67.89")' };
+  }
+  
+  // Date validation (basic)
+  if (normalizedType.includes('date')) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return { valid: true };
+      }
+    }
+    return { valid: false, error: 'Date values must be in YYYY-MM-DD format' };
+  }
+  
+  // Year validation
+  if (normalizedType.includes('year')) {
+    if (/^\d{4}$/.test(value)) {
+      const year = parseInt(value);
+      if (year >= 1 && year <= 9999) {
+        return { valid: true };
+      }
+    }
+    return { valid: false, error: 'Year values must be 4-digit years (1-9999)' };
+  }
+  
+  // ID validation
+  if (normalizedType.includes('id')) {
+    if (/^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'ID values must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens' };
+  }
+  
+  // String validation (most permissive)
+  if (normalizedType.includes('string')) {
+    return { valid: true };
+  }
+  
+  // Default: allow any value
+  return { valid: true };
 };
 
 // Format date
