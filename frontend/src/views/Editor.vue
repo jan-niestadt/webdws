@@ -341,7 +341,7 @@ const getDefaultTextContent = (element: any): string => {
     return element.fixedValue;
   }
   
-  // Generate type-based defaults for text content (but not for date fields)
+  // Generate type-based defaults for text content
   const type = element.type.toLowerCase();
   
   if (type.includes('boolean')) {
@@ -356,14 +356,14 @@ const getDefaultTextContent = (element: any): string => {
     return '0';
   }
   
-  // Don't provide defaults for date fields - leave them empty
-  // if (type.includes('date')) {
-  //   return new Date().toISOString().split('T')[0];
-  // }
+  // For date fields, provide type-based defaults only if no schema default
+  if (type.includes('date')) {
+    return new Date().toISOString().split('T')[0];
+  }
   
-  // if (type.includes('year')) {
-  //   return new Date().getFullYear().toString();
-  // }
+  if (type.includes('year')) {
+    return new Date().getFullYear().toString();
+  }
   
   // For strings and other types, return empty string
   return '';
@@ -395,14 +395,14 @@ const createElementXML = (element: any, indentLevel: number = 0, isRoot: boolean
   
   xml += '>';
   
-  // Add default text content if element has a simple type
+  // Add text content for simple types
   if (element.type && !element.children) {
     const textContent = getDefaultTextContent(element);
-    if (textContent) {
-      xml += textContent;
-    }
-  } else if (element.children) {
-    // Add required child elements recursively
+    xml += textContent;
+  }
+  
+  // Add required child elements recursively
+  if (element.children) {
     for (const child of element.children) {
       if (child.minOccurs > 0) {
         xml += createElementXML(child, indentLevel + 1);
