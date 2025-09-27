@@ -13,14 +13,35 @@
   <div class="xml-tree-editor">
     <div class="tree-toolbar">
       <div class="toolbar-left">
-        <button 
-          @click="addElement" 
-          class="btn btn-sm" 
-          :disabled="!selectedNode || !canHaveChildren(selectedNode)"
-          :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : 'Add new element'"
-        >
-          Add Element
-        </button>
+        <div class="add-element-container">
+          <button 
+            @click="addElement" 
+            class="btn btn-sm" 
+            :disabled="!selectedNode || !canHaveChildren(selectedNode)"
+            :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : 'Add new element'"
+          >
+            Add Element
+          </button>
+          <div v-if="showElementDropdown" class="element-dropdown">
+            <div class="dropdown-header">Select element to add:</div>
+            <div 
+              v-for="(element, index) in allowedChildElements" 
+              :key="index"
+              @click="addSelectedElement(element)"
+              class="dropdown-item"
+            >
+              <div class="element-info">
+                <span class="element-name">{{ element.name }}</span>
+                <span v-if="element.minOccurs > 0" class="required-indicator">*</span>
+              </div>
+              <div class="element-details">
+                <span class="element-type">{{ element.type }}</span>
+                <span class="occurrence-info">{{ element.minOccurs }}..{{ element.maxOccurs }}</span>
+              </div>
+            </div>
+            <div @click="hideElementDropdown" class="dropdown-item cancel">Cancel</div>
+          </div>
+        </div>
         <button 
           @click="addText" 
           class="btn btn-sm" 
@@ -147,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
@@ -181,6 +202,10 @@ const showXPathPanel = ref(false);
 
 const editingNode = ref<XmlNode | null>(null);
 const editingAttributeKeys = ref<{ [key: string]: string }>({});
+
+// Element dropdown state
+const showElementDropdown = ref(false);
+const allowedChildElements = ref<SchemaElement[]>([]);
 
 // Computed
 const selectedNode = computed(() => {
@@ -443,9 +468,10 @@ const addElement = () => {
     };
     addChildNode(selectedNode.value.id, newElement);
     selectNode(newElement.id);
-  } else {
-    // Multiple allowed elements, show selection dialog
-    showElementSelectionDialog(allowedElements);
+  } else if (allowedElements.length > 1) {
+    // Multiple allowed elements, show dropdown
+    allowedChildElements.value = allowedElements;
+    showElementDropdown.value = true;
   }
 };
 
@@ -727,27 +753,42 @@ const getAllowedChildElements = (parentNode: XmlNode): SchemaElement[] => {
   return parentSchemaElement.children;
 };
 
-const showElementSelectionDialog = (allowedElements: SchemaElement[]) => {
-  // Create a simple selection dialog
-  const elementNames = allowedElements.map(el => el.name);
-  const selectedName = prompt(`Select element to add:\n${elementNames.map((name, idx) => `${idx + 1}. ${name}`).join('\n')}\n\nEnter the number:`);
+const addSelectedElement = (element: SchemaElement) => {
+  if (!selectedNode.value) return;
   
-  if (selectedName) {
-    const index = parseInt(selectedName) - 1;
-    if (index >= 0 && index < allowedElements.length) {
-      const elementName = allowedElements[index].name;
-      const newElement: XmlNode = {
-        id: generateId(),
-        type: 'element',
-        name: elementName,
-        children: [],
-        parent: selectedNode.value!.id
-      };
-      addChildNode(selectedNode.value!.id, newElement);
-      selectNode(newElement.id);
-    }
+  const newElement: XmlNode = {
+    id: generateId(),
+    type: 'element',
+    name: element.name,
+    children: [],
+    parent: selectedNode.value.id
+  };
+  
+  addChildNode(selectedNode.value.id, newElement);
+  selectNode(newElement.id);
+  hideElementDropdown();
+};
+
+const hideElementDropdown = () => {
+  showElementDropdown.value = false;
+  allowedChildElements.value = [];
+};
+
+// Click outside handler to close dropdown
+const handleClickOutside = (event: Event) => {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.add-element-container')) {
+    hideElementDropdown();
   }
 };
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped>
@@ -770,6 +811,91 @@ const showElementSelectionDialog = (allowedElements: SchemaElement[]) => {
 .toolbar-left, .toolbar-right {
   display: flex;
   gap: 0.5rem;
+}
+
+.add-element-container {
+  position: relative;
+  display: inline-block;
+}
+
+.element-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  max-width: 300px;
+  margin-top: 2px;
+}
+
+.dropdown-header {
+  padding: 0.5rem 0.75rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.dropdown-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.dropdown-item:hover {
+  background: #f8f9fa;
+}
+
+.dropdown-item.cancel {
+  border-top: 1px solid #dee2e6;
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+}
+
+.element-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.element-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.element-name {
+  font-weight: 600;
+  color: #007bff;
+  font-size: 0.875rem;
+}
+
+.required-indicator {
+  color: #dc3545;
+  font-weight: bold;
+  font-size: 0.875rem;
+}
+
+.element-type {
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.occurrence-info {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-family: monospace;
 }
 
 .tree-container {
