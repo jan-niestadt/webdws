@@ -48,8 +48,6 @@ export class XmlService {
    */
   public parseXml(xmlString: string): XmlParseResult {
     try {
-      console.log('XML Service: Parsing XML with native DOMParser');
-      console.log('XML Service: Input XML:', xmlString.substring(0, 200) + '...');
       
       // Use native DOMParser for reliable XML parsing
       const parser = new DOMParser();
@@ -62,7 +60,6 @@ export class XmlService {
         };
       }
 
-      console.log('XML Service: Successfully parsed with DOMParser');
       return {
         success: true,
         document: doc
@@ -287,22 +284,14 @@ export class XmlService {
         };
       }
 
-      console.log('Evaluating XPath expression on node with SaxonJS:', xpathExpression);
-      console.log('Context node:', contextNode);
-      console.log('Context node type:', contextNode.nodeType);
-      console.log('Context node name:', contextNode.nodeName);
 
       // Ensure we have a proper document context
       const document = contextNode.ownerDocument || contextNode as Document;
-      console.log('Document:', document);
-      console.log('Document element:', document.documentElement);
 
       // Use SaxonJS XPath evaluation with proper context
       const result = SaxonJS.XPath.evaluate(xpathExpression, document, {
         namespaces: namespaces || {}
       });
-
-      console.log('XPath evaluation successful with SaxonJS');
       return {
         success: true,
         result: result
@@ -332,8 +321,6 @@ export class XmlService {
         };
       }
 
-      console.log('Evaluating XPath expression with SaxonJS:', xpathExpression);
-      console.log('XML content length:', xmlString.length);
 
       // Parse XML using SaxonJS to get proper document structure
       const doc = await SaxonJS.getResource({ text: xmlString, type: 'xml' });
@@ -345,23 +332,15 @@ export class XmlService {
         };
       }
 
-      console.log('SaxonJS parsed document:', doc);
-      console.log('Document type:', typeof doc);
-      console.log('Document constructor:', doc.constructor.name);
 
       // Use SaxonJS XPath evaluation
       const result = SaxonJS.XPath.evaluate(xpathExpression, doc, {
         namespaces: namespaces || {}
       });
 
-      console.log('XPath evaluation successful with SaxonJS');
-      console.log('Raw result:', result);
-      console.log('Result type:', typeof result);
-      //console.log('Result constructor:', result.constructor.name);
 
       // Convert SaxonJS result to a displayable format
       const processedResult = this.processSaxonJSResult(result);
-      console.log('Processed result:', processedResult);
 
       return {
         success: true,

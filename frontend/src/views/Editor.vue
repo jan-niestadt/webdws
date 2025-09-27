@@ -134,8 +134,6 @@ const treeEditorRef = ref<InstanceType<typeof XmlTreeEditor>>();
 const initEditor = () => {
   if (!editorContainer.value) return;
 
-  console.log('initEditor called with mode:', editorMode.value);
-  console.log('initEditor XML content:', xmlContent.value.substring(0, 100) + '...');
 
   editor = monaco.editor.create(editorContainer.value, {
     value: xmlContent.value,
@@ -226,15 +224,11 @@ const selectDocument = async (doc: XmlDocument) => {
 
 // Save document
 const saveDocument = async () => {
-  console.log('Save button clicked');
-  console.log('Document name:', documentName.value);
-  console.log('Is modified:', isModified.value);
   
   // Get current XML content from tree editor if in tree mode
   let currentXmlContent = xmlContent.value;
   if (editorMode.value === 'tree' && treeEditorRef.value) {
     currentXmlContent = treeEditorRef.value.getCurrentXmlContent();
-    console.log('Getting XML content from tree editor:', currentXmlContent.substring(0, 100) + '...');
   }
   
   if (!documentName.value.trim() || !currentXmlContent.trim()) {
@@ -348,9 +342,6 @@ const formatDate = (dateString: string) => {
 
 // Mode switching
 const setMode = async (mode: 'text' | 'tree') => {
-  console.log('Switching to mode:', mode);
-  console.log('Current XML content length:', xmlContent.value.length);
-  console.log('Current XML content preview:', xmlContent.value.substring(0, 100) + '...');
   
   editorMode.value = mode;
   
@@ -369,7 +360,6 @@ const setMode = async (mode: 'text' | 'tree') => {
       try {
         const formattedXml = xmlService.formatXml(xmlContent.value);
         xmlContent.value = formattedXml;
-        console.log('Formatted XML for text view:', formattedXml.substring(0, 100) + '...');
       } catch (error) {
         console.warn('Failed to format XML:', error);
         // Continue with unformatted XML if formatting fails
@@ -377,7 +367,6 @@ const setMode = async (mode: 'text' | 'tree') => {
     }
     
     // Reinitialize the editor with formatted content (read-only)
-    console.log('Initializing XML view with content:', xmlContent.value.substring(0, 100) + '...');
   } else {
     // Switching to tree mode - dispose and recreate editor to ensure clean state
     if (editor) {
@@ -389,7 +378,6 @@ const setMode = async (mode: 'text' | 'tree') => {
     initialTreeContent.value = xmlContent.value;
     
     // Wait for DOM update and recreate editor in tree mode
-    console.log('Initializing tree editor with content:', xmlContent.value.substring(0, 100) + '...');
     await nextTick();
   }
   initEditor();
@@ -403,7 +391,6 @@ const handleTreeModified = (modified: boolean) => {
 
 // Handle XML content changes from tree editor
 const handleXmlChanged = (newContent: string) => {
-  console.log('XML content changed from tree editor:', newContent.substring(0, 100) + '...');
   // Update xmlContent.value so XML view shows current content
   xmlContent.value = newContent;
   isModified.value = true;

@@ -205,7 +205,6 @@ const findNodeById = (node: XmlNode, id: string): XmlNode | null => {
 
 const parseXmlToTree = async (xmlContent: string): Promise<XmlNode | null> => {
   try {
-    console.log('parseXmlToTree called with content:', xmlContent.substring(0, 200) + '...');
     const parseResult = xmlService.parseXml(xmlContent);
     
     if (!parseResult.success || !parseResult.document) {
@@ -213,22 +212,14 @@ const parseXmlToTree = async (xmlContent: string): Promise<XmlNode | null> => {
       throw new Error(parseResult.error || 'Invalid XML');
     }
     
-    console.log('XML parsed successfully, document:', parseResult.document);
-    console.log('Document type:', typeof parseResult.document);
-    console.log('Document constructor:', parseResult.document.constructor.name);
-    console.log('Document element:', parseResult.document.documentElement);
-    console.log('Document element type:', typeof parseResult.document.documentElement);
     
     // Check if we have a documentElement
     if (!parseResult.document.documentElement) {
       console.error('No documentElement found in parsed document');
-      console.log('Document keys:', Object.keys(parseResult.document));
-      console.log('Document properties:', Object.getOwnPropertyNames(parseResult.document));
       throw new Error('No root element found in XML document');
     }
     
     const treeNode = domNodeToXmlNode(parseResult.document.documentElement);
-    console.log('Converted to tree node:', treeNode);
     return treeNode;
   } catch (error) {
     console.error('Error parsing XML:', error);
@@ -311,7 +302,6 @@ const canHaveChildren = (node: XmlNode): boolean => {
 
 
 const treeToXml = (node: XmlNode, indent: number = 0): string => {
-  console.log('treeToXml called with node:', node);
   
   const indentStr = '  '.repeat(indent);
   
@@ -348,19 +338,15 @@ const treeToXml = (node: XmlNode, indent: number = 0): string => {
         xml += `${indentStr}</${node.name}>`;
       }
     }
-    console.log('Generated XML for element:', xml);
     return xml;
   } else if (node.type === 'text') {
     const result = node.value || '';
-    console.log('Generated XML for text:', result);
     return result;
   } else if (node.type === 'comment') {
     const result = `${indentStr}<!--${node.value}-->`;
-    console.log('Generated XML for comment:', result);
     return result;
   } else if (node.type === 'cdata') {
     const result = `${indentStr}<![CDATA[${node.value}]]>`;
-    console.log('Generated XML for cdata:', result);
     return result;
   }
   return '';
@@ -393,25 +379,19 @@ const toggleNode = (nodeId: string) => {
 };
 
 const editNode = (editData: { nodeId: string; field: string; value: any }) => {
-  console.log('editNode called:', editData);
   const { nodeId, field, value } = editData;
   const node = findNodeById(treeState.value.root!, nodeId);
   if (!node) {
-    console.log('Node not found:', nodeId);
     return;
   }
   
-  console.log('Found node before update:', JSON.parse(JSON.stringify(node)));
   
   if (field === 'remove') {
     // Remove the node (for empty text nodes)
-    console.log('Removing node');
     removeNode(nodeId);
   } else {
     // Update the node property
-    console.log('Updating node property:', field, 'to', value);
     (node as any)[field] = value;
-    console.log('Node after update:', JSON.parse(JSON.stringify(node)));
     
     // Force reactivity update
     treeState.value = { ...treeState.value };
@@ -646,7 +626,6 @@ const emitXmlContent = () => {
   if (treeState.value.root) {
     emitCounter++;
     const xmlContent = getCurrentXmlContent();
-    console.log(`Emitting XML content update #${emitCounter}:`, xmlContent.substring(0, 100) + '...');
     
     emit('xml-changed', xmlContent);
     emit('tree-modified', true);
@@ -657,13 +636,11 @@ const emitXmlContent = () => {
 
 // Method to update tree content from external source
 const updateTreeContent = async (xmlContent: string) => {
-  console.log('updateTreeContent called with:', xmlContent.substring(0, 100) + '...');
   if (xmlContent && xmlContent.trim()) {
     const parsed = await parseXmlToTree(xmlContent);
     if (parsed) {
       treeState.value.root = parsed;
       treeState.value.modified = false;
-      console.log('Tree content updated successfully');
     } else {
       console.error('Failed to parse XML content for update');
     }
@@ -679,12 +656,10 @@ defineExpose({
 // Watch for changes to initial XML content
 watch(() => props.initialXmlContent, async (newContent) => {
   if (newContent && newContent.trim()) {
-    console.log('Initial XML content changed:', newContent.substring(0, 100) + '...');
     const parsed = await parseXmlToTree(newContent);
     if (parsed) {
       treeState.value.root = parsed;
       treeState.value.modified = false;
-      console.log('Tree content updated from prop');
     } else {
       console.error('Failed to parse updated XML content');
     }
@@ -694,11 +669,9 @@ watch(() => props.initialXmlContent, async (newContent) => {
 // Initialize tree with initial XML content
 onMounted(async () => {
   if (props.initialXmlContent && props.initialXmlContent.trim()) {
-    console.log('Initializing tree with content:', props.initialXmlContent.substring(0, 100) + '...');
     const parsed = await parseXmlToTree(props.initialXmlContent);
     if (parsed) {
       treeState.value.root = parsed;
-      console.log('Tree initialized successfully');
     } else {
       console.error('Failed to parse initial XML content');
     }

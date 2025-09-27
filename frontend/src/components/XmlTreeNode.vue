@@ -141,7 +141,6 @@ const editInput = ref<HTMLInputElement | null>(null);
 
 // Watch for external changes to node value
 watch(() => props.node.value, (newValue) => {
-  console.log('Node value changed externally:', newValue);
   if (!isEditing.value) {
     // Only update editingValue if we're not currently editing
     editingValue.value = newValue || '';
@@ -193,10 +192,8 @@ const getAttributesString = (): string => {
 const startInlineEdit = async () => {
   if (!['text', 'comment', 'cdata'].includes(props.node.type)) return;
   
-  console.log('startInlineEdit called for node:', props.node.id, 'value:', props.node.value);
   isEditing.value = true;
   editingValue.value = props.node.value || '';
-  console.log('editingValue set to:', editingValue.value);
   
   await nextTick();
   if (editInput.value) {
@@ -209,20 +206,11 @@ const finishInlineEdit = () => {
   if (!isEditing.value) return;
   
   const newValue = editingValue.value.trim();
-  console.log('finishInlineEdit called:', {
-    nodeId: props.node.id,
-    nodeType: props.node.type,
-    oldValue: props.node.value,
-    newValue: newValue,
-    editingValue: editingValue.value
-  });
   
   // For text nodes, remove if empty; for comments and CDATA, keep even if empty
   if (props.node.type === 'text' && newValue === '') {
-    console.log('Removing empty text node');
     emit('edit', { nodeId: props.node.id, field: 'remove', value: null });
   } else {
-    console.log('Updating node value to:', newValue);
     emit('edit', { nodeId: props.node.id, field: 'value', value: newValue });
   }
   
