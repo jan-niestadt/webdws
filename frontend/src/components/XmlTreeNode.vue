@@ -273,21 +273,27 @@ const addButtons = computed(() => {
   
   const buttons = [];
   
-  // Check each child element type to see if it can be repeated
+  // Check each child element type
   for (const childSchema of schemaElement.children) {
-    if (childSchema.maxOccurs === 'unbounded' || parseInt(childSchema.maxOccurs) > 1) {
-      // Count existing children of this type
-      const existingCount = props.node.children.filter(child => 
-        child.type === 'element' && child.name === childSchema.name
-      ).length;
-      
-      // Only show add button if we haven't reached the limit
-      if (childSchema.maxOccurs === 'unbounded' || existingCount < parseInt(childSchema.maxOccurs)) {
-        buttons.push({
-          elementName: childSchema.name,
-          displayName: childSchema.name.charAt(0).toUpperCase() + childSchema.name.slice(1)
-        });
-      }
+    // Count existing children of this type
+    const existingCount = props.node.children.filter(child => 
+      child.type === 'element' && child.name === childSchema.name
+    ).length;
+    
+    // Show add button if:
+    // 1. It's a repeatable element (maxOccurs > 1 or unbounded) and we haven't reached the limit
+    // 2. It's a required element (minOccurs > 0) and we don't have the minimum required
+    const isRepeatable = childSchema.maxOccurs === 'unbounded' || parseInt(childSchema.maxOccurs) > 1;
+    const isRequired = childSchema.minOccurs > 0;
+    const needsMore = isRepeatable ? 
+      (childSchema.maxOccurs === 'unbounded' || existingCount < parseInt(childSchema.maxOccurs)) :
+      (isRequired && existingCount < childSchema.minOccurs);
+    
+    if (needsMore) {
+      buttons.push({
+        elementName: childSchema.name,
+        displayName: childSchema.name.charAt(0).toUpperCase() + childSchema.name.slice(1)
+      });
     }
   }
   

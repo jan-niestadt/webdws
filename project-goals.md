@@ -7,4 +7,6 @@ Goals for this project:
 - targets non-technical users
 - there must always be an XML schema
 - the XML schema determines the user interface
-- the document is validated against the XML schema and shows any problems where in the document they occur
+- the document is validated against the XML schema
+- if there are any schema violations, a descriptive message is shown in the UI where the invalid value or structure occurs
+
