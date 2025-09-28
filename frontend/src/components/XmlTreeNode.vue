@@ -121,6 +121,7 @@
           :value="node.value"
           @click="startInlineEdit"
           class="form-input field-input"
+          :class="{ 'has-error': fieldError }"
           :placeholder="getAttributePlaceholder()"
           readonly
         />
@@ -132,13 +133,13 @@
             @keydown.escape.prevent="cancelInlineEdit"
             @input="validateCurrentValue"
             class="form-input field-input"
-            :class="{ 'invalid': validationError }"
+            :class="{ 'invalid': validationError || fieldError }"
             ref="valueInput"
             :placeholder="getAttributePlaceholder()"
           />
-          <div v-if="validationError" class="field-error-container">
+          <div v-if="validationError || fieldError" class="field-error-container">
             <span class="field-error-icon">⚠️</span>
-            <span class="field-error">{{ validationError }}</span>
+            <span class="field-error">{{ validationError || fieldError }}</span>
           </div>
         </div>
       </div>
@@ -221,6 +222,9 @@ const editingValue = ref('');
 const validationError = ref<string | null>(null);
 const editInput = ref<HTMLInputElement | null>(null);
 const valueInput = ref<HTMLInputElement | null>(null);
+
+// Field-level validation error
+const fieldError = ref<string | null>(null);
 
 // Context menu state
 const showMenu = ref(false);
@@ -461,41 +465,9 @@ const toggleNode = () => {
 
 // Validation function (simplified version for real-time feedback)
 const validateCurrentValue = () => {
-  if (props.node.type === 'attribute') {
-    const value = editingValue.value;
-    const type = getAttributeType(); // We'll need to get this from props or context
-    
-    // Basic validation for common types
-    if (type && type.toLowerCase().includes('boolean')) {
-      const lowerValue = value.toLowerCase();
-      if (value && !['true', 'false', '1', '0'].includes(lowerValue)) {
-        validationError.value = 'Boolean values must be "true", "false", "1", or "0"';
-        return;
-      }
-    } else if (type && type.toLowerCase().includes('int') && !type.toLowerCase().includes('string')) {
-      if (value && !/^-?\d+$/.test(value)) {
-        validationError.value = 'Integer values must contain only digits';
-        return;
-      }
-    } else if (type && (type.toLowerCase().includes('decimal') || type.toLowerCase().includes('float'))) {
-      if (value && !/^-?\d+(\.\d+)?$/.test(value)) {
-        validationError.value = 'Decimal values must be valid numbers';
-        return;
-      }
-    } else if (type && type.toLowerCase().includes('date')) {
-      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        validationError.value = 'Date values must be in YYYY-MM-DD format';
-        return;
-      }
-    } else if (type && type.toLowerCase().includes('year')) {
-      if (value && !/^\d{4}$/.test(value)) {
-        validationError.value = 'Year values must be 4-digit years';
-        return;
-      }
-    }
-    
-    validationError.value = null;
-  }
+  const error = validateField(editingValue.value);
+  validationError.value = error;
+  fieldError.value = error;
 };
 
 // Helper to get attribute type (simplified - in a real app you'd pass this as a prop)
@@ -669,6 +641,101 @@ const handleBooleanAttributeChange = (event: Event) => {
   
   // Emit the change for the attribute
   emit('edit', { nodeId: props.node.id, field: 'value', value: newValue });
+};
+
+// Validate current field value
+const validateField = (value: string): string | null => {
+  if (props.node.type === 'attribute' && props.schemaInfo) {
+    // Find the parent element's schema
+    const parentElement = findParentElementSchema();
+    if (parentElement && parentElement.attributes) {
+      const attribute = parentElement.attributes.find((attr: any) => attr.name === props.node.name);
+      if (attribute) {
+        const validationResult = validateValue(value, attribute.type);
+        return validationResult.valid ? null : validationResult.error || 'Invalid value';
+      }
+    }
+  } else if (props.node.type === 'text' && props.schemaInfo) {
+    // Find the parent element's schema for text content
+    const parentElement = findParentElementSchema();
+    if (parentElement) {
+      const validationResult = validateValue(value, parentElement.type);
+      return validationResult.valid ? null : validationResult.error || 'Invalid value';
+    }
+  }
+  return null;
+};
+
+// Validate value helper function (same as in Editor.vue)
+const validateValue = (value: string, type: string): { valid: boolean; error?: string } => {
+  if (!value.trim()) {
+    return { valid: true }; // Empty values are valid (handled by required validation)
+  }
+  
+  const normalizedType = type.toLowerCase();
+  
+  // Boolean validation
+  if (normalizedType.includes('boolean')) {
+    const lowerValue = value.toLowerCase();
+    if (lowerValue === 'true' || lowerValue === 'false' || lowerValue === '1' || lowerValue === '0') {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Boolean values must be "true", "false", "1", or "0"' };
+  }
+  
+  // Integer validation
+  if (normalizedType.includes('int') && !normalizedType.includes('string')) {
+    if (/^-?\d+$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Integer values must contain only digits (optionally with leading minus sign)' };
+  }
+  
+  // Decimal/float validation
+  if (normalizedType.includes('decimal') || normalizedType.includes('float') || normalizedType.includes('double')) {
+    if (/^-?\d+(\.\d+)?$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Decimal values must be valid numbers (e.g., "123.45", "-67.89")' };
+  }
+  
+  // Date validation (basic)
+  if (normalizedType.includes('date')) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return { valid: true };
+      }
+    }
+    return { valid: false, error: 'Date values must be in YYYY-MM-DD format' };
+  }
+  
+  // Year validation (xs:gYear)
+  if (normalizedType.includes('gyear') || normalizedType.includes('year')) {
+    if (/^\d{4}$/.test(value)) {
+      const year = parseInt(value);
+      if (year >= 1 && year <= 9999) {
+        return { valid: true };
+      }
+    }
+    return { valid: false, error: 'Year values must be 4-digit years (1-9999)' };
+  }
+  
+  // ID validation
+  if (normalizedType.includes('id')) {
+    if (/^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'ID values must start with a letter or underscore and contain only letters, numbers, underscores, dots, and hyphens' };
+  }
+  
+  // String validation (most permissive)
+  if (normalizedType.includes('string')) {
+    return { valid: true };
+  }
+  
+  // Default: allow any value
+  return { valid: true };
 };
 </script>
 
@@ -907,6 +974,16 @@ const handleBooleanAttributeChange = (event: Event) => {
   color: #dc3545;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.has-error {
+  border-color: #e74c3c !important;
+  background-color: #fdf2f2;
+}
+
+.has-error:focus {
+  border-color: #e74c3c !important;
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2) !important;
 }
 
 .field-input.invalid {

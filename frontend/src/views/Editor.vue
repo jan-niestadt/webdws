@@ -741,7 +741,18 @@ const validateElementAgainstSchema = (element: Element, schemaElement: any, sche
     const childElements = Array.from(element.children);
     const childElementCounts: { [key: string]: number } = {};
     
-    for (const childElement of childElements) {
+    // For xs:sequence, we need to validate order strictly
+    // Create a mapping of element names to their expected positions
+    const elementPositions: { [key: string]: number } = {};
+    schemaElement.children.forEach((child: any, index: number) => {
+      elementPositions[child.name] = index;
+    });
+    
+    // Track the current position in the sequence
+    let currentSequencePosition = 0;
+    
+    for (let i = 0; i < childElements.length; i++) {
+      const childElement = childElements[i];
       const childName = childElement.tagName;
       childElementCounts[childName] = (childElementCounts[childName] || 0) + 1;
       
@@ -755,10 +766,36 @@ const validateElementAgainstSchema = (element: Element, schemaElement: any, sche
       }
       
       // Check occurrence constraints
-      if (childElementCounts[childName] > childSchema.maxOccurs) {
+      const maxOccurs = childSchema.maxOccurs === 'unbounded' ? Infinity : parseInt(childSchema.maxOccurs);
+      if (childElementCounts[childName] > maxOccurs) {
         return { 
           valid: false, 
           error: `Element '${childName}' appears too many times (max: ${childSchema.maxOccurs})` 
+        };
+      }
+      
+      // For xs:sequence, validate strict order
+      const expectedPosition = elementPositions[childName];
+      
+      // Check if this element is in the correct position
+      if (expectedPosition < currentSequencePosition) {
+        // This element appeared too early - it should come later
+        const expectedElement = schemaElement.children[currentSequencePosition];
+        return { 
+          valid: false, 
+          error: `Element '${childName}' appears out of order. Expected '${expectedElement.name}' at this position.` 
+        };
+      }
+      
+      // Update current sequence position
+      if (expectedPosition === currentSequencePosition) {
+        currentSequencePosition++;
+      } else if (expectedPosition > currentSequencePosition) {
+        // This element is too late - we're missing required elements
+        const missingElement = schemaElement.children[currentSequencePosition];
+        return { 
+          valid: false, 
+          error: `Element '${missingElement.name}' is required before '${childName}'` 
         };
       }
       
@@ -828,8 +865,8 @@ const validateValue = (value: string, type: string): { valid: boolean; error?: s
     return { valid: false, error: 'Date values must be in YYYY-MM-DD format' };
   }
   
-  // Year validation
-  if (normalizedType.includes('year')) {
+  // Year validation (xs:gYear)
+  if (normalizedType.includes('gyear') || normalizedType.includes('year')) {
     if (/^\d{4}$/.test(value)) {
       const year = parseInt(value);
       if (year >= 1 && year <= 9999) {

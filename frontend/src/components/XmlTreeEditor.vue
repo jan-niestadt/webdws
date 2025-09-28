@@ -400,7 +400,44 @@ const addChildNode = (parentId: string, newNode: XmlNode) => {
   const parent = findNodeById(treeState.value.root!, parentId);
   if (parent) {
     newNode.parent = parentId;
-    parent.children.push(newNode);
+    
+    // If it's an element, insert it in the correct schema order
+    if (newNode.type === 'element' && props.schemaInfo) {
+      const parentSchema = findSchemaElement(parent.name || '', props.schemaInfo.elements || []);
+      if (parentSchema && parentSchema.children) {
+        // Find the correct position for this element based on schema order
+        const elementPosition = parentSchema.children.findIndex((child: any) => child.name === newNode.name);
+        if (elementPosition >= 0) {
+          // Find where to insert this element in the children array
+          let insertIndex = parent.children.length;
+          
+          // Look for the correct position based on schema order
+          for (let i = 0; i < parent.children.length; i++) {
+            const child = parent.children[i];
+            if (child.type === 'element') {
+              const childPosition = parentSchema.children.findIndex((schemaChild: any) => schemaChild.name === child.name);
+              if (childPosition > elementPosition) {
+                insertIndex = i;
+                break;
+              }
+            }
+          }
+          
+          // Insert at the correct position
+          parent.children.splice(insertIndex, 0, newNode);
+        } else {
+          // Fallback: just push to end
+          parent.children.push(newNode);
+        }
+      } else {
+        // No schema info, just push to end
+        parent.children.push(newNode);
+      }
+    } else {
+      // For attributes and other types, just push to end
+      parent.children.push(newNode);
+    }
+    
     markModified();
   }
 };
