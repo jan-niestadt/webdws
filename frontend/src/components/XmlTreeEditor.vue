@@ -11,124 +11,42 @@
 -->
 <template>
   <div class="xml-tree-editor">
-    <div class="tree-toolbar">
-      <div class="toolbar-left">
-        <div class="add-element-container">
-          <button 
-            @click="addElement" 
-            class="btn btn-sm" 
-            :disabled="!selectedNode || !canHaveChildren(selectedNode) || (selectedNode && getAllowedChildElements(selectedNode).length === 0)"
-            :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : (selectedNode && getAllowedChildElements(selectedNode).length === 0) ? 'No more elements can be added (max occurrence reached)' : 'Add new element'"
-          >
-            Add Element
-          </button>
-          <div v-if="showElementDropdown" class="element-dropdown">
-            <div class="dropdown-header">Select element to add:</div>
-            <div 
-              v-for="(element, index) in allowedChildElements" 
-              :key="index"
-              @click="addSelectedElement(element)"
-              class="dropdown-item"
-            >
-              <div class="element-info">
-                <span class="element-name">{{ element.name }}</span>
-                <span v-if="element.minOccurs > 0" class="required-indicator">*</span>
-                <span class="current-count">({{ countChildElements(selectedNode!, element.name) }}/{{ element.maxOccurs === 'unbounded' ? '∞' : element.maxOccurs }})</span>
-                <span v-if="hasRequiredContent(element)" class="auto-create-indicator">⚡</span>
-              </div>
-              <div class="element-details">
-                <span class="element-type">{{ element.type }}</span>
-                <span class="occurrence-info">{{ element.minOccurs }}..{{ element.maxOccurs }}</span>
-              </div>
-              <div v-if="hasRequiredContent(element)" class="auto-create-info">
-                <span class="auto-create-text">Auto-creates required content</span>
-              </div>
-            </div>
-            <div v-if="allowedChildElements.length === 0" class="dropdown-item disabled">
-              <div class="element-info">
-                <span class="no-elements">No more elements can be added</span>
-              </div>
-              <div class="element-details">
-                <span class="reason">All elements have reached their maximum occurrence limit</span>
-              </div>
-            </div>
-            <div @click="hideElementDropdown" class="dropdown-item cancel">Cancel</div>
-          </div>
-        </div>
-        <button 
-          @click="addText" 
-          class="btn btn-sm" 
-          :disabled="!selectedNode || !canHaveChildren(selectedNode)"
-          :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : 'Add text content'"
-        >
-          Add Text
-        </button>
-        <button 
-          @click="addComment" 
-          class="btn btn-sm" 
-          :disabled="!selectedNode || !canHaveChildren(selectedNode)"
-          :title="!selectedNode ? 'Select a node first' : !canHaveChildren(selectedNode) ? 'Only element nodes can have children' : 'Add comment'"
-        >
-          Add Comment
-        </button>
-        <div class="add-attribute-container">
-          <button 
-            @click="addAttribute" 
-            class="btn btn-sm" 
-            :disabled="!selectedNode || selectedNode.type !== 'element' || (selectedNode && getAllowedAttributes(selectedNode).length === 0)"
-            :title="!selectedNode ? 'Select a node first' : selectedNode.type !== 'element' ? 'Only element nodes can have attributes' : (selectedNode && getAllowedAttributes(selectedNode).length === 0) ? 'No more attributes can be added' : 'Add attribute'"
-          >
-            Add Attribute
-          </button>
-          <div v-if="showAttributeDropdown" class="attribute-dropdown">
-            <div class="dropdown-header">Select attribute to add:</div>
-            <div 
-              v-for="(attr, index) in allowedAttributes" 
-              :key="index"
-              @click="addSelectedAttribute(attr)"
-              class="dropdown-item"
-            >
-              <div class="attribute-info">
-                <span class="attribute-name">{{ attr.name }}</span>
-                <span v-if="attr.use === 'required'" class="required-indicator">*</span>
-                <span class="attribute-type">{{ attr.type }}</span>
-              </div>
-              <div v-if="attr.defaultValue" class="attribute-details">
-                <span class="default-value">Default: {{ attr.defaultValue }}</span>
-              </div>
-            </div>
-            <div v-if="allowedAttributes.length === 0" class="dropdown-item disabled">
-              <div class="attribute-info">
-                <span class="no-attributes">No more attributes can be added</span>
-              </div>
-              <div class="attribute-details">
-                <span class="reason">All allowed attributes already exist</span>
-              </div>
-            </div>
-            <div @click="hideAttributeDropdown" class="dropdown-item cancel">Cancel</div>
-          </div>
-        </div>
-        <button 
-          @click="deleteNode" 
-          class="btn btn-sm btn-danger" 
-          :disabled="!selectedNode || isRoot"
-          :title="!selectedNode ? 'Select a node first' : isRoot ? 'Cannot delete root element' : 'Delete selected node'"
-        >
-          Delete
-        </button>
+    <div class="form-toolbar">
+      <div class="toolbar-section">
+        <h3 class="toolbar-title">Form Editor</h3>
+        <p class="toolbar-description">Right-click elements to delete, use Add buttons to add more items</p>
       </div>
-      <div class="toolbar-right">
-        <button @click="expandAll" class="btn btn-sm">Expand All</button>
-        <button @click="collapseAll" class="btn btn-sm">Collapse All</button>
+      
+      <div class="toolbar-actions">
+        <div class="action-group">
+          <h4 class="action-group-title">View Controls</h4>
+          <div class="action-buttons">
+            <button @click="expandAll" class="btn btn-outline">
+              <span class="btn-icon">📂</span>
+              Expand All
+            </button>
+            <button @click="collapseAll" class="btn btn-outline">
+              <span class="btn-icon">📁</span>
+              Collapse All
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="tree-container">
+    <div class="form-container">
       <div v-if="!treeState.root" class="empty-state">
-        <p>No XML content to display</p>
-        <button @click="createRootElement" class="btn">
-          {{ rootElement ? `Create ${rootElement.name} Element` : 'Create Root Element' }}
-        </button>
+        <div class="empty-state-content">
+          <div class="empty-state-icon">📝</div>
+          <h3 class="empty-state-title">Start Building Your Form</h3>
+          <p class="empty-state-description">
+            Create a new form by adding fields and sections. You can start with a basic form or use a template.
+          </p>
+          <button @click="createRootElement" class="btn btn-primary btn-lg">
+            <span class="btn-icon">✨</span>
+            {{ rootElement ? `Create ${getElementDisplayName(rootElement.name)} Form` : 'Create New Form' }}
+          </button>
+        </div>
       </div>
       
       <div v-else class="tree-content">
@@ -139,7 +57,8 @@
           @select="selectNode"
           @toggle="toggleNode"
           @edit="editNode"
-          @add-child="addChildNode"
+          @delete="deleteNode"
+          @add-element="addElementToNode"
         />
       </div>
     </div>
@@ -160,12 +79,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import type { XmlNode, XmlTreeState } from '@/types/xml';
 import XmlTreeNode from './XmlTreeNode.vue';
 import XPathQuery from './XPathQuery.vue';
 import { xmlService } from '@/services/xmlService';
-import type { SchemaInfo, SchemaElement, SchemaAttribute } from '@/services/api';
+import type { SchemaInfo, SchemaElement } from '@/services/api';
 import { getDefaultAttributeValue, getDefaultTextContent } from '@/utils/defaultValues';
 
 // Props
@@ -193,23 +112,7 @@ const treeState = ref<XmlTreeState>({
 // Panel visibility state
 const showXPathPanel = ref(false);
 
-// Element dropdown state
-const showElementDropdown = ref(false);
-const allowedChildElements = ref<SchemaElement[]>([]);
 
-// Attribute dropdown state
-const showAttributeDropdown = ref(false);
-const allowedAttributes = ref<SchemaAttribute[]>([]);
-
-// Computed
-const selectedNode = computed(() => {
-  if (!treeState.value.selectedNodeId || !treeState.value.root) return null;
-  return findNodeById(treeState.value.root, treeState.value.selectedNodeId);
-});
-
-const isRoot = computed(() => {
-  return selectedNode.value?.id === treeState.value.root?.id;
-});
 
 // Methods
 const generateId = () => {
@@ -323,10 +226,6 @@ const shouldIncludeNode = (domNode: Node): boolean => {
   return true;
 };
 
-const canHaveChildren = (node: XmlNode): boolean => {
-  // Only element nodes can have children in XML
-  return node.type === 'element';
-};
 
 /**
  * Check if an element is a simple element (only contains text content, no child elements)
@@ -506,92 +405,8 @@ const addChildNode = (parentId: string, newNode: XmlNode) => {
 };
 
 
-const addElement = () => {
-  if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
-  
-  // Get allowed child elements based on schema
-  const allowedElements = getAllowedChildElements(selectedNode.value);
-  
-  if (allowedElements.length === 0) {
-    // No schema restrictions, use default element name
-    const elementName = 'element';
-    const newElement: XmlNode = {
-      id: generateId(),
-      type: 'element',
-      name: elementName,
-      children: [],
-      parent: selectedNode.value.id
-    };
-    addChildNode(selectedNode.value.id, newElement);
-    selectNode(newElement.id);
-  } else if (allowedElements.length === 1) {
-    // Only one allowed element, use it directly with auto-creation
-    addSelectedElement(allowedElements[0]);
-  } else if (allowedElements.length > 1) {
-    // Multiple allowed elements, show dropdown
-    allowedChildElements.value = allowedElements;
-    showElementDropdown.value = true;
-  }
-};
 
 
-const addText = () => {
-  if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
-  
-  const newText: XmlNode = {
-    id: generateId(),
-    type: 'text',
-    value: 'New text content',
-    children: [],
-    parent: selectedNode.value.id
-  };
-  
-  addChildNode(selectedNode.value.id, newText);
-  selectNode(newText.id);
-};
-
-const addComment = () => {
-  if (!selectedNode.value || !canHaveChildren(selectedNode.value)) return;
-  
-  const newComment: XmlNode = {
-    id: generateId(),
-    type: 'comment',
-    value: 'New comment',
-    children: [],
-    parent: selectedNode.value.id
-  };
-  
-  addChildNode(selectedNode.value.id, newComment);
-  selectNode(newComment.id);
-};
-
-const addAttribute = () => {
-  if (!selectedNode.value || selectedNode.value.type !== 'element') return;
-  
-  // Get allowed attributes based on schema
-  const allowedAttrs = getAllowedAttributes(selectedNode.value);
-  
-  if (allowedAttrs.length === 0) {
-    // No schema restrictions, create a default attribute
-    const newAttribute: XmlNode = {
-      id: generateId(),
-      type: 'attribute',
-      name: 'newAttribute',
-      value: '',
-      children: [],
-      parent: selectedNode.value.id
-    };
-    addChildNode(selectedNode.value.id, newAttribute);
-    selectNode(newAttribute.id);
-  } else if (allowedAttrs.length === 1) {
-    // Only one allowed attribute, use it directly
-    addSelectedAttribute(allowedAttrs[0]);
-  } else if (allowedAttrs.length > 1) {
-    // Multiple allowed attributes, show dropdown
-    allowedAttributes.value = allowedAttrs;
-    showAttributeDropdown.value = true;
-  }
-};
 
 const removeNode = (nodeId: string) => {
   const node = findNodeById(treeState.value.root!, nodeId);
@@ -607,11 +422,27 @@ const removeNode = (nodeId: string) => {
   }
 };
 
-const deleteNode = () => {
-  if (!selectedNode.value || isRoot.value) return;
+const deleteNode = (nodeId: string) => {
+  const node = findNodeById(treeState.value.root!, nodeId);
+  if (!node || node === treeState.value.root) return;
   
-  removeNode(selectedNode.value.id);
+  removeNode(nodeId);
 };
+
+const addElementToNode = (data: { parentId: string; elementName: string }) => {
+  const parent = findNodeById(treeState.value.root!, data.parentId);
+  if (!parent) return;
+  
+  // Find the schema element definition
+  const schemaElement = findSchemaElement(data.elementName, props.schemaInfo?.elements || []);
+  if (!schemaElement) return;
+  
+  // Create the new element with required content
+  const newElement = createElementWithRequiredContent(schemaElement, data.parentId);
+  addChildNode(data.parentId, newElement);
+  selectNode(newElement.id);
+};
+
 
 
 
@@ -741,145 +572,10 @@ onMounted(async () => {
   }
 });
 
-// Schema-aware helper functions
-const getAllowedChildElements = (parentNode: XmlNode): SchemaElement[] => {
-  if (!props.schemaInfo || !props.rootElement) {
-    return []; // No schema restrictions
-  }
-  
-  // Find the schema element definition for the parent node
-  const findSchemaElement = (elementName: string, schemaElements: SchemaElement[]): SchemaElement | null => {
-    for (const element of schemaElements) {
-      if (element.name === elementName) {
-        return element;
-      }
-      if (element.children) {
-        const found = findSchemaElement(elementName, element.children);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-  
-  const parentSchemaElement = findSchemaElement(parentNode.name || '', props.schemaInfo.elements);
-  if (!parentSchemaElement || !parentSchemaElement.children) {
-    return []; // No allowed children defined
-  }
-  
-  // Filter out elements that have reached their maximum occurrence limit
-  const allowedElements = parentSchemaElement.children.filter(schemaElement => {
-    const currentCount = countChildElements(parentNode, schemaElement.name);
-    const maxOccurs = schemaElement.maxOccurs;
-    
-    if (maxOccurs === 'unbounded') {
-      return true; // No limit
-    }
-    
-    const maxCount = parseInt(maxOccurs);
-    return currentCount < maxCount;
-  });
-  
-  return allowedElements;
-};
-
-const addSelectedElement = (element: SchemaElement) => {
-  if (!selectedNode.value) return;
-  
-  // Use unified function to create complete element with all required content
-  const newElement = createElementWithRequiredContent(element, selectedNode.value.id);
-  
-  addChildNode(selectedNode.value.id, newElement);
-  selectNode(newElement.id);
-  hideElementDropdown();
-};
-
-const hideElementDropdown = () => {
-  showElementDropdown.value = false;
-  allowedChildElements.value = [];
-};
-
-const countChildElements = (parentNode: XmlNode, elementName: string): number => {
-  if (!parentNode.children) return 0;
-  
-  return parentNode.children.filter(child => 
-    child.type === 'element' && child.name === elementName
-  ).length;
-};
 
 
-const hasRequiredContent = (element: SchemaElement): boolean => {
-  // Check for required attributes
-  if (element.attributes) {
-    const hasRequiredAttrs = element.attributes.some(attr => attr.use === 'required');
-    if (hasRequiredAttrs) return true;
-  }
-  
-  // Check for required child elements
-  if (element.children) {
-    const hasRequiredChildren = element.children.some(child => child.minOccurs > 0);
-    if (hasRequiredChildren) return true;
-  }
-  
-  return false;
-};
 
-const getAllowedAttributes = (elementNode: XmlNode): SchemaAttribute[] => {
-  if (!props.schemaInfo || !props.rootElement) {
-    return []; // No schema restrictions
-  }
-  
-  // Find the schema element definition for the current element
-  const findSchemaElement = (elementName: string, schemaElements: SchemaElement[]): SchemaElement | null => {
-    for (const element of schemaElements) {
-      if (element.name === elementName) {
-        return element;
-      }
-      if (element.children) {
-        const found = findSchemaElement(elementName, element.children);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-  
-  const schemaElement = findSchemaElement(elementNode.name || '', props.schemaInfo.elements);
-  if (!schemaElement || !schemaElement.attributes) {
-    return []; // No attributes defined for this element
-  }
-  
-  // Get existing attribute names
-  const existingAttributeNames = new Set(
-    elementNode.children
-      .filter(child => child.type === 'attribute')
-      .map(attr => attr.name)
-      .filter(Boolean)
-  );
-  
-  // Filter out attributes that already exist
-  return schemaElement.attributes.filter(attr => !existingAttributeNames.has(attr.name));
-};
 
-const addSelectedAttribute = (attr: SchemaAttribute) => {
-  if (!selectedNode.value) return;
-  
-  const newAttribute: XmlNode = {
-    id: generateId(),
-    type: 'attribute',
-    name: attr.name,
-    value: getDefaultAttributeValue(attr),
-    children: [],
-    parent: selectedNode.value.id
-  };
-  
-  addChildNode(selectedNode.value.id, newAttribute);
-  selectNode(newAttribute.id);
-  hideAttributeDropdown();
-};
-
-const hideAttributeDropdown = () => {
-  showAttributeDropdown.value = false;
-  allowedAttributes.value = [];
-};
 
 
 // Unified function to create a complete element with all required content
@@ -890,7 +586,8 @@ const createElementWithRequiredContent = (schemaElement: SchemaElement, parentId
     name: schemaElement.name,
     value: '',
     parent: parentId,
-    children: []
+    children: [],
+    expanded: true
   };
   
   // Add required attributes
@@ -953,6 +650,16 @@ const findSchemaElement = (elementName: string, schemaElements: SchemaElement[])
   }
   return null;
 };
+
+// Helper methods for display names
+const getElementDisplayName = (elementName: string): string => {
+  return elementName
+    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+    .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+    .replace(/_/g, ' ') // Replace underscores with spaces
+    .trim();
+};
+
 
 const validateValue = (value: string, type: string): { valid: boolean; error?: string } => {
   if (!value.trim()) {
@@ -1025,23 +732,13 @@ const validateValue = (value: string, type: string): { valid: boolean; error?: s
   return { valid: true };
 };
 
-// Click outside handler to close dropdowns
-const handleClickOutside = (event: Event) => {
-  const target = event.target as HTMLElement;
-  if (!target.closest('.add-element-container')) {
-    hideElementDropdown();
-  }
-  if (!target.closest('.add-attribute-container')) {
-    hideAttributeDropdown();
-  }
-};
 
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
+  // No longer needed
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
+  // No longer needed
 });
 </script>
 
@@ -1053,17 +750,56 @@ onUnmounted(() => {
   background: white;
 }
 
-.tree-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background: #f8f9fa;
+.form-toolbar {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-bottom: 1px solid #dee2e6;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.toolbar-left, .toolbar-right {
+.toolbar-section {
+  margin-bottom: 1rem;
+}
+
+.toolbar-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.toolbar-description {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.95rem;
+}
+
+.toolbar-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.action-group {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.action-group-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 1px solid #f1f3f4;
+  padding-bottom: 0.25rem;
+}
+
+.action-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -1250,24 +986,57 @@ onUnmounted(() => {
   font-style: italic;
 }
 
-.tree-container {
+.form-container {
   flex: 1;
   overflow: auto;
   padding: 1rem;
+  background: #fafbfc;
 }
 
 .empty-state {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 200px;
+  min-height: 400px;
+  padding: 2rem;
+}
+
+.empty-state-content {
+  text-align: center;
+  max-width: 500px;
+}
+
+.empty-state-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.7;
+}
+
+.empty-state-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.empty-state-description {
+  margin: 0 0 2rem 0;
   color: #6c757d;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.btn-lg {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  min-height: 56px;
 }
 
 .tree-content {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
 .properties-panel {
@@ -1380,29 +1149,71 @@ onUnmounted(() => {
 }
 
 .btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid transparent;
+  border-radius: 6px;
   background: white;
   color: #2c3e50;
   cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  min-height: 44px;
 }
 
 .btn:hover:not(:disabled) {
-  background: #f8f9fa;
-  border-color: #3498db;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
-.btn-sm {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+.btn-primary {
+  background: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2980b9;
+  border-color: #2980b9;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #5a6268;
+  border-color: #5a6268;
+}
+
+.btn-outline {
+  background: transparent;
+  color: #6c757d;
+  border-color: #dee2e6;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #f8f9fa;
+  color: #2c3e50;
+  border-color: #adb5bd;
 }
 
 .btn-danger {
@@ -1414,6 +1225,11 @@ onUnmounted(() => {
 .btn-danger:hover:not(:disabled) {
   background: #c0392b;
   border-color: #c0392b;
+}
+
+.btn-icon {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .element-dropdown select {

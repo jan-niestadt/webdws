@@ -9,173 +9,186 @@
   - Event emission for parent component communication
 -->
 <template>
-  <div class="xml-tree-node">
-    <div 
-      class="node-line"
-      :class="{ 
-        'selected': isSelected,
-        'expanded': node.expanded,
-        'collapsed': !node.expanded && node.children.length > 0 && !isSimpleElement
-      }"
-      @click="handleNodeClick"
-    >
-      <div class="node-content">
-        <span 
-          v-if="node.children.length > 0 && !isSimpleElement" 
-          class="expand-toggle"
-          @click.stop="toggleNode"
-        >
-          {{ node.expanded ? '▼' : '▶' }}
-        </span>
-        <span v-else class="expand-spacer"></span>
-        
-        <span class="node-icon" :class="node.type">
-          {{ getNodeIcon(node.type) }}
-        </span>
-        
-        <span 
-          v-if="node.type === 'element' && !isSimpleElement" 
-          class="node-name"
-        >
-          &lt;{{ node.name }}{{ node.children.length === 0 ? ' /' : '' }}&gt;
-        </span>
-        
-        <span 
-          v-else-if="node.type === 'element' && isSimpleElement && !isEditing" 
-          class="node-value editable simple-element"
-          @click.stop="startInlineEdit"
-          :title="'Click to edit: ' + getSimpleElementValue()"
-        >
-          &lt;{{ node.name }}&gt;{{ getSimpleElementValue() }}&lt;/{{ node.name }}&gt;
-        </span>
-        
-        <div 
-          v-else-if="node.type === 'element' && isSimpleElement && isEditing"
-          class="simple-element-edit"
-          @click.stop
-        >
-          <span class="element-name">&lt;{{ node.name }}&gt;</span>
+  <div class="form-node" @contextmenu.prevent="showContextMenu">
+    <!-- Context Menu -->
+    <div v-if="showMenu" class="context-menu" :style="menuStyle" @click.stop>
+      <div class="context-menu-item" @click="deleteNode">
+        <span class="context-menu-icon">🗑️</span>
+        Delete
+      </div>
+    </div>
+
+    <!-- Element Section -->
+    <div v-if="node.type === 'element'" class="form-section">
+      <!-- Simple Element (single input field) -->
+      <div v-if="isSimpleElement" class="form-field-inline">
+        <label class="field-label-inline">{{ getElementDisplayName() }}</label>
+        <div class="field-input-container">
+          <!-- Boolean field as checkbox -->
+          <div v-if="isBooleanField && !isEditing" class="checkbox-container">
+            <input 
+              type="checkbox"
+              :checked="getBooleanValue()"
+              @change="handleBooleanChange"
+              class="form-checkbox"
+            />
+            <span class="checkbox-label">{{ getBooleanValue() ? 'Yes' : 'No' }}</span>
+          </div>
+          <!-- Regular input field -->
           <input 
+            v-else-if="!isEditing"
+            :value="getSimpleElementValue()"
+            @click="startInlineEdit"
+            class="form-input field-input"
+            :placeholder="getPlaceholder()"
+            readonly
+          />
+          <input 
+            v-else
             v-model="editingValue"
             @blur="finishInlineEdit"
             @keydown.enter.prevent="finishInlineEdit"
             @keydown.escape.prevent="cancelInlineEdit"
-            class="element-value-input"
+            class="form-input field-input"
             ref="editInput"
-            :title="'Press Enter to save, Escape to cancel'"
+            :placeholder="getPlaceholder()"
           />
-          <span class="element-name">&lt;/{{ node.name }}&gt;</span>
         </div>
-        
-        <span 
-          v-else-if="node.type === 'attribute' && !isEditing" 
-          class="node-value editable"
-          @click.stop="startInlineEdit"
-          :title="getAttributeTitle()"
-        >
-          {{ node.name }}="{{ node.value }}"
-        </span>
-        
-        <div 
-          v-else-if="node.type === 'attribute' && isEditing"
-          class="attribute-edit"
-          :class="{ 'validation-error': validationError }"
-          @click.stop
-        >
-          <span class="attribute-name-display">{{ node.name }}</span>
-          <span class="attribute-equals">=</span>
+      </div>
+
+      <!-- Complex Element (with children) -->
+      <div v-else class="form-element-section">
+        <div class="element-header" @click="handleNodeClick">
+          <span class="element-icon">📄</span>
+          <span class="element-name">{{ getElementDisplayName() }}</span>
+          <button 
+            v-if="node.children.length > 0"
+            @click.stop="toggleNode"
+            class="btn-toggle"
+            :class="{ 'expanded': node.expanded }"
+          >
+            {{ node.expanded ? '▼' : '▶' }}
+          </button>
+        </div>
+        <div v-if="node.expanded" class="form-children">
+          <XmlTreeNode
+            v-for="child in node.children"
+            :key="child.id"
+            :node="child"
+            :selected-id="selectedId"
+            :schema-info="schemaInfo"
+            @select="$emit('select', $event)"
+            @toggle="$emit('toggle', $event)"
+            @edit="$emit('edit', $event)"
+            @delete="$emit('delete', $event)"
+            @add-element="$emit('add-element', $event)"
+          />
+          
+                  <!-- Add buttons for repeatable child elements -->
+                  <div v-if="addButtons.length > 0" class="add-element-button-container">
+                    <button 
+                      v-for="button in addButtons" 
+                      :key="button.elementName"
+                      @click="addChildElement(button.elementName)" 
+                      class="btn-add-element"
+                    >
+                      <span class="btn-icon">➕</span>
+                      Add {{ button.displayName }}
+                    </button>
+                  </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attribute Field -->
+    <div v-else-if="node.type === 'attribute'" class="form-field-inline">
+      <label class="field-label-inline">{{ getAttributeDisplayName() }}</label>
+      <div class="field-input-container">
+        <!-- Boolean attribute as checkbox -->
+        <div v-if="isBooleanAttribute && !isEditing" class="checkbox-container">
+          <input 
+            type="checkbox"
+            :checked="getBooleanAttributeValue()"
+            @change="handleBooleanAttributeChange"
+            class="form-checkbox"
+          />
+          <span class="checkbox-label">{{ getBooleanAttributeValue() ? 'Yes' : 'No' }}</span>
+        </div>
+        <!-- Regular attribute input -->
+        <input 
+          v-else-if="!isEditing"
+          :value="node.value"
+          @click="startInlineEdit"
+          class="form-input field-input"
+          :placeholder="getAttributePlaceholder()"
+          readonly
+        />
+        <div v-else class="field-input-container" @click.stop>
           <input 
             v-model="editingValue"
             @blur="finishAttributeEdit"
             @keydown.enter.prevent="finishAttributeEdit"
             @keydown.escape.prevent="cancelInlineEdit"
             @input="validateCurrentValue"
-            class="attribute-value-input"
+            class="form-input field-input"
             :class="{ 'invalid': validationError }"
             ref="valueInput"
-            placeholder="attribute value"
-            :title="validationError || 'Press Enter to save, Escape to cancel'"
+            :placeholder="getAttributePlaceholder()"
           />
-          <span v-if="validationError" class="validation-error-message">{{ validationError }}</span>
+          <div v-if="validationError" class="field-error-container">
+            <span class="field-error-icon">⚠️</span>
+            <span class="field-error">{{ validationError }}</span>
+          </div>
         </div>
-        
-        <span 
-          v-else-if="node.type === 'text' && !isEditing" 
-          class="node-value editable"
-          @click.stop="startInlineEdit"
-          :title="'Click to edit: ' + node.value"
-        >
-          "{{ node.value }}"
-        </span>
-        
-        <input 
-          v-else-if="node.type === 'text' && isEditing"
-          v-model="editingValue"
-          @blur="finishInlineEdit"
-          @keydown.enter.prevent="finishInlineEdit"
-          @keydown.escape.prevent="cancelInlineEdit"
-          class="node-value-input"
-          ref="editInput"
-          :title="'Press Enter to save, Escape to cancel'"
-        />
-        
-        <span 
-          v-else-if="node.type === 'comment' && !isEditing" 
-          class="node-value editable"
-          @click.stop="startInlineEdit"
-          :title="'Click to edit: ' + node.value"
-        >
-          &lt;!--{{ node.value }}--&gt;
-        </span>
-        
-        <input 
-          v-else-if="node.type === 'comment' && isEditing"
-          v-model="editingValue"
-          @blur="finishInlineEdit"
-          @keydown.enter.prevent="finishInlineEdit"
-          @keydown.escape.prevent="cancelInlineEdit"
-          class="node-value-input"
-          ref="editInput"
-          :title="'Press Enter to save, Escape to cancel'"
-        />
-        
-        <span 
-          v-else-if="node.type === 'cdata' && !isEditing" 
-          class="node-value editable"
-          @click.stop="startInlineEdit"
-          :title="'Click to edit: ' + node.value"
-        >
-          &lt;![CDATA[{{ node.value }}]]&gt;
-        </span>
-        
-        <input 
-          v-else-if="node.type === 'cdata' && isEditing"
-          v-model="editingValue"
-          @blur="finishInlineEdit"
-          @keydown.enter.prevent="finishInlineEdit"
-          @keydown.escape.prevent="cancelInlineEdit"
-          class="node-value-input"
-          ref="editInput"
-          :title="'Press Enter to save, Escape to cancel'"
-        />
-        
-        <span class="node-value" v-else>
-          {{ node.value }}
-        </span>
       </div>
     </div>
-    
-    <div v-if="node.expanded && node.children.length > 0 && !isSimpleElement" class="node-children">
-      <XmlTreeNode
-        v-for="child in node.children"
-        :key="child.id"
-        :node="child"
-        :selected-id="selectedId"
-        :schema-info="schemaInfo"
-        @select="$emit('select', $event)"
-        @toggle="$emit('toggle', $event)"
-        @edit="$emit('edit', $event)"
-      />
+
+    <!-- Text Content Field -->
+    <div v-else-if="node.type === 'text'" class="form-field-inline">
+      <label class="field-label-inline">Text Content</label>
+      <div class="field-input-container">
+        <textarea 
+          v-if="!isEditing"
+          :value="node.value"
+          @click="startInlineEdit"
+          class="form-textarea field-input readonly"
+          placeholder="Enter text content..."
+          readonly
+        />
+        <textarea 
+          v-else
+          v-model="editingValue"
+          @blur="finishInlineEdit"
+          @keydown.escape.prevent="cancelInlineEdit"
+          class="form-textarea field-input"
+          ref="editInput"
+          placeholder="Enter text content..."
+        />
+      </div>
+    </div>
+
+    <!-- Comment Field -->
+    <div v-else-if="node.type === 'comment'" class="form-field-inline">
+      <label class="field-label-inline">Comment</label>
+      <div class="field-input-container">
+        <textarea 
+          v-if="!isEditing"
+          :value="node.value"
+          @click="startInlineEdit"
+          class="form-textarea field-input readonly"
+          placeholder="Enter comment..."
+          readonly
+        />
+        <textarea 
+          v-else
+          v-model="editingValue"
+          @blur="finishInlineEdit"
+          @keydown.escape.prevent="cancelInlineEdit"
+          class="form-textarea field-input"
+          ref="editInput"
+          placeholder="Enter comment..."
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -196,6 +209,8 @@ const emit = defineEmits<{
   'select': [nodeId: string];
   'toggle': [nodeId: string];
   'edit': [editData: { nodeId: string; field: string; value: any }];
+  'delete': [nodeId: string];
+  'add-element': [data: { parentId: string; elementName: string }];
 }>();
 
 // Reactive state for inline editing
@@ -204,6 +219,10 @@ const editingValue = ref('');
 const validationError = ref<string | null>(null);
 const editInput = ref<HTMLInputElement | null>(null);
 const valueInput = ref<HTMLInputElement | null>(null);
+
+// Context menu state
+const showMenu = ref(false);
+const menuStyle = ref({});
 
 // Watch for external changes to node value
 watch(() => props.node.value, (newValue) => {
@@ -214,10 +233,6 @@ watch(() => props.node.value, (newValue) => {
 });
 
 // Computed
-const isSelected = computed(() => {
-  return props.selectedId === props.node.id;
-});
-
 const isSimpleElement = computed(() => {
   if (props.node.type !== 'element') return false;
   
@@ -241,11 +256,66 @@ const isSimpleElement = computed(() => {
   return false;
 });
 
+
 const getSimpleElementValue = (): string => {
   if (!isSimpleElement.value) return '';
   const textChild = props.node.children.find(child => child.type === 'text');
   return textChild?.value || '';
 };
+
+// Get the add buttons that should be shown for this element
+const addButtons = computed(() => {
+  if (props.node.type !== 'element' || !props.schemaInfo) return [];
+  
+  // Find the schema element definition for this element
+  const schemaElement = findSchemaElement(props.node.name || '', props.schemaInfo.elements);
+  if (!schemaElement || !schemaElement.children) return [];
+  
+  const buttons = [];
+  
+  // Check each child element type to see if it can be repeated
+  for (const childSchema of schemaElement.children) {
+    if (childSchema.maxOccurs === 'unbounded' || parseInt(childSchema.maxOccurs) > 1) {
+      // Count existing children of this type
+      const existingCount = props.node.children.filter(child => 
+        child.type === 'element' && child.name === childSchema.name
+      ).length;
+      
+      // Only show add button if we haven't reached the limit
+      if (childSchema.maxOccurs === 'unbounded' || existingCount < parseInt(childSchema.maxOccurs)) {
+        buttons.push({
+          elementName: childSchema.name,
+          displayName: childSchema.name.charAt(0).toUpperCase() + childSchema.name.slice(1)
+        });
+      }
+    }
+  }
+  
+  return buttons;
+});
+
+const isBooleanField = computed(() => {
+  if (props.node.type !== 'element' || !props.schemaInfo) return false;
+  
+  const schemaElement = findSchemaElement(props.node.name || '', props.schemaInfo.elements);
+  if (!schemaElement) return false;
+  
+  return schemaElement.type && schemaElement.type.toLowerCase().includes('boolean');
+});
+
+const isBooleanAttribute = computed(() => {
+  if (props.node.type !== 'attribute' || !props.schemaInfo) return false;
+  
+  // Find the parent element's schema
+  const parentElement = findParentElementSchema();
+  if (!parentElement) return false;
+  
+  // Find the attribute in the parent's attributes
+  const attribute = parentElement.attributes?.find((attr: any) => attr.name === props.node.name);
+  if (!attribute) return false;
+  
+  return attribute.type && attribute.type.toLowerCase().includes('boolean');
+});
 
 // Helper function to find schema element definition
 const findSchemaElement = (elementName: string, elements: any[]): any => {
@@ -261,6 +331,90 @@ const findSchemaElement = (elementName: string, elements: any[]): any => {
   return null;
 };
 
+// Helper function to find parent element schema
+const findParentElementSchema = (): any => {
+  if (!props.schemaInfo) return null;
+  
+  // This is a simplified approach - we need to find the parent element's schema
+  // For now, we'll look for the root element that contains this attribute
+  const rootElement = props.schemaInfo.elements[0];
+  if (!rootElement) return null;
+  
+  // Check if this attribute can be found in the root element's attributes
+  const findInChildren = (element: any): any => {
+    if (element.attributes) {
+      for (const attr of element.attributes) {
+        if (attr.name === props.node.name) {
+          return element;
+        }
+      }
+    }
+    if (element.children) {
+      for (const child of element.children) {
+        const found = findInChildren(child);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  
+  return findInChildren(rootElement);
+};
+
+
+
+// Form display helper methods
+const getElementDisplayName = (): string => {
+  if (props.node.type !== 'element') return '';
+  
+  // Convert element name to a more user-friendly display name
+  const name = props.node.name || '';
+  return name
+    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+    .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+    .replace(/_/g, ' ') // Replace underscores with spaces
+    .trim();
+};
+
+const getAttributeDisplayName = (): string => {
+  if (props.node.type !== 'attribute') return '';
+  
+  const name = props.node.name || '';
+  return name
+    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+    .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+    .replace(/_/g, ' ') // Replace underscores with spaces
+    .trim();
+};
+
+
+const getPlaceholder = (): string => {
+  if (props.node.type !== 'element') return '';
+  
+  const schemaElement = findSchemaElement(props.node.name || '', props.schemaInfo?.elements || []);
+  if (schemaElement?.type) {
+    const type = schemaElement.type.toLowerCase();
+    if (type.includes('string')) return 'Enter text...';
+    if (type.includes('int') || type.includes('number')) return 'Enter number...';
+    if (type.includes('date')) return 'YYYY-MM-DD';
+    if (type.includes('boolean')) return 'true or false';
+    if (type.includes('email')) return 'user@example.com';
+  }
+  return 'Enter value...';
+};
+
+const getAttributePlaceholder = (): string => {
+  if (props.node.type !== 'attribute') return '';
+  
+  const type = getAttributeType().toLowerCase();
+  if (type.includes('string')) return 'Enter text...';
+  if (type.includes('int') || type.includes('number')) return 'Enter number...';
+  if (type.includes('date')) return 'YYYY-MM-DD';
+  if (type.includes('boolean')) return 'true or false';
+  if (type.includes('email')) return 'user@example.com';
+  return 'Enter value...';
+};
+
 // Methods
 const handleNodeClick = () => {
   emit('select', props.node.id);
@@ -270,31 +424,6 @@ const toggleNode = () => {
   emit('toggle', props.node.id);
 };
 
-const getNodeIcon = (type: XmlNode['type']): string => {
-  switch (type) {
-    case 'element':
-      return '📄';
-    case 'text':
-      return '📝';
-    case 'comment':
-      return '💬';
-    case 'cdata':
-      return '📋';
-    case 'processing-instruction':
-      return '⚙️';
-    case 'attribute':
-      return '🏷️';
-    default:
-      return '❓';
-  }
-};
-
-const getAttributeTitle = (): string => {
-  if (props.node.type === 'attribute') {
-    return `Click to edit: ${props.node.name}="${props.node.value}"`;
-  }
-  return '';
-};
 
 // Validation function (simplified version for real-time feedback)
 const validateCurrentValue = () => {
@@ -421,244 +550,384 @@ const cancelInlineEdit = () => {
   editingValue.value = '';
   validationError.value = null;
 };
+
+// Context menu methods
+const showContextMenu = (event: MouseEvent) => {
+  event.preventDefault();
+  showMenu.value = true;
+  menuStyle.value = {
+    position: 'fixed',
+    left: `${event.clientX}px`,
+    top: `${event.clientY}px`,
+    zIndex: 1000
+  };
+  
+  // Hide menu when clicking elsewhere
+  const hideMenu = () => {
+    showMenu.value = false;
+    document.removeEventListener('click', hideMenu);
+  };
+  
+  setTimeout(() => {
+    document.addEventListener('click', hideMenu);
+  }, 0);
+};
+
+const deleteNode = () => {
+  emit('delete', props.node.id);
+  showMenu.value = false;
+};
+
+// Add child element method
+const addChildElement = (elementName: string) => {
+  emit('add-element', {
+    parentId: props.node.id,
+    elementName: elementName
+  });
+};
+
+// Boolean field methods
+const getBooleanValue = (): boolean => {
+  const value = getSimpleElementValue().toLowerCase();
+  return value === 'true' || value === '1';
+};
+
+const handleBooleanChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const newValue = target.checked ? 'true' : 'false';
+  
+  // Update the text child with the new boolean value
+  let textChild = props.node.children.find(child => child.type === 'text');
+  if (!textChild) {
+    // Create text child if it doesn't exist
+    textChild = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: 'text',
+      value: newValue,
+      parent: props.node.id,
+      children: []
+    };
+    props.node.children.push(textChild);
+  } else {
+    textChild.value = newValue;
+  }
+  
+  // Emit the change
+  emit('edit', { nodeId: props.node.id, field: 'simpleElementValue', value: newValue });
+};
+
+// Boolean attribute methods
+const getBooleanAttributeValue = (): boolean => {
+  const value = props.node.value?.toLowerCase() || '';
+  return value === 'true' || value === '1';
+};
+
+const handleBooleanAttributeChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const newValue = target.checked ? 'true' : 'false';
+  
+  // Emit the change for the attribute
+  emit('edit', { nodeId: props.node.id, field: 'value', value: newValue });
+};
 </script>
 
 <style scoped>
-.xml-tree-node {
-  user-select: none;
-}
-
-.node-line {
-  display: flex;
-  align-items: center;
-  padding: 0.25rem 0;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+.form-node {
+  margin-bottom: 0.5rem;
   position: relative;
 }
 
-.node-line:hover {
-  background-color: #f8f9fa;
+.context-menu {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 0.25rem 0;
+  min-width: 120px;
 }
 
-.node-line.selected {
-  background-color: #e3f2fd;
-  border-left: 3px solid #3498db;
-  padding-left: 0.5rem;
-}
-
-.node-content {
+.context-menu-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.expand-toggle, .expand-spacer {
-  width: 16px;
-  text-align: center;
-  font-size: 12px;
-  color: #6c757d;
+  padding: 0.5rem 0.75rem;
   cursor: pointer;
-  flex-shrink: 0;
-}
-
-.expand-toggle:hover {
-  color: #3498db;
-}
-
-.node-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.node-name {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
+  font-size: 0.9rem;
   color: #2c3e50;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.node-value {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  color: #6c757d;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-style: italic;
-}
-
-.node-value.editable {
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
   transition: background-color 0.2s;
 }
 
-.node-value.editable:hover {
-  background-color: #f8f9fa;
-  border: 1px dashed #dee2e6;
+.context-menu-item:hover {
+  background: #f8f9fa;
 }
 
-.node-value-input {
-  background: white;
-  border: 2px solid #3498db;
-  border-radius: 3px;
-  padding: 2px 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  color: #2c3e50;
-  outline: none;
-  min-width: 100px;
-  max-width: 300px;
+.context-menu-icon {
+  font-size: 0.8rem;
 }
 
-.node-value-input:focus {
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+.add-element-button-container {
+  padding: 0.5rem;
+  text-align: center;
+  border-top: 1px solid #e9ecef;
+  background: #f8f9fa;
 }
 
-.attribute-edit {
+.btn-add-element {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add-element:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-icon {
+  font-size: 0.8rem;
+}
+
+.checkbox-container {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkbox-container:hover {
+  border-color: #3498db;
   background: #f8f9fa;
-  border: 2px solid #3498db;
-  border-radius: 3px;
-  padding: 2px 4px;
 }
 
-.attribute-value-input {
-  background: transparent;
-  border: none;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
+.form-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3498db;
+}
+
+.checkbox-label {
+  font-size: 0.9rem;
   color: #2c3e50;
+  user-select: none;
+}
+
+.form-section {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.form-field-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.form-field-inline:last-child {
+  border-bottom: none;
+}
+
+.field-label-inline {
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 0.9rem;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.field-input-container {
+  position: relative;
+  flex: 1;
+}
+
+.field-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  background: white;
+}
+
+.field-input:focus {
   outline: none;
-  padding: 2px 4px;
-  border-radius: 2px;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }
 
-.attribute-name-display {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  font-weight: bold;
+.field-input.readonly {
+  background: white;
+  cursor: pointer;
+  border: 1px solid #e9ecef;
+}
+
+.field-input.readonly:hover {
+  border-color: #3498db;
+  background: white;
+}
+
+
+.form-textarea {
+  min-height: 40px;
+  max-height: 40px;
+  height: 40px;
+  resize: none;
+  font-family: inherit;
+  overflow: hidden;
+}
+
+.form-element-section {
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.element-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.element-header:hover {
+  background: #e9ecef;
+}
+
+.element-icon {
+  font-size: 1rem;
+}
+
+.element-name {
+  font-weight: 600;
   color: #2c3e50;
-  padding: 2px 4px;
+  font-size: 0.95rem;
+  flex: 1;
 }
 
-.attribute-value-input {
-  min-width: 100px;
-}
-
-.attribute-equals {
+.btn-toggle {
+  background: none;
+  border: none;
+  font-size: 0.8rem;
   color: #6c757d;
-  font-weight: bold;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 3px;
+  transition: all 0.2s;
 }
 
-.validation-error {
-  border-color: #dc3545 !important;
+.btn-toggle:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #2c3e50;
 }
 
-.attribute-value-input.invalid {
+.btn-toggle.expanded {
+  color: #3498db;
+}
+
+.field-error-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+}
+
+.field-error-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.field-error {
+  font-size: 0.85rem;
+  color: #dc3545;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.field-input.invalid {
   border-color: #dc3545;
   background-color: #fff5f5;
 }
 
-.validation-error-message {
-  display: block;
-  font-size: 0.75rem;
-  color: #dc3545;
-  margin-top: 0.25rem;
-  font-style: italic;
+.field-input.invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
 }
 
-.node-children {
-  margin-left: 20px;
-  border-left: 1px solid #e9ecef;
-  padding-left: 8px;
+.form-children {
+  padding: 0.5rem;
+  background: #fafbfc;
+  border-top: 1px solid #f1f3f4;
 }
 
-/* Node type specific styling */
-.node-icon.element {
-  color: #3498db;
+.form-children .form-node {
+  margin-bottom: 0.25rem;
 }
 
-.node-icon.text {
-  color: #27ae60;
+.form-children .form-node:last-child {
+  margin-bottom: 0;
 }
 
-.node-icon.comment {
-  color: #f39c12;
+/* Responsive design */
+@media (max-width: 768px) {
+  .section-header {
+    padding: 0.75rem 1rem;
+  }
+  
+  .form-field {
+    padding: 1rem;
+  }
+  
+  .form-children {
+    padding: 0.75rem 1rem;
+  }
+  
+  .section-name {
+    font-size: 1rem;
+  }
 }
 
-.node-icon.cdata {
-  color: #9b59b6;
+/* Focus states for accessibility */
+.field-input:focus-visible {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
 }
 
-.node-icon.processing-instruction {
-  color: #e74c3c;
+.btn-toggle:focus-visible {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
 }
 
-/* Simple element styling */
-.simple-element {
-  color: #2c3e50;
-  font-family: 'Courier New', monospace;
-  background-color: #f8f9fa;
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid #e9ecef;
-  cursor: pointer;
-  transition: all 0.2s ease;
+/* Animation for smooth transitions */
+.form-section {
+  transition: box-shadow 0.2s ease;
 }
 
-.simple-element:hover {
-  background-color: #e9ecef;
-  border-color: #3498db;
-}
-
-.simple-element-edit {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background-color: #fff;
-  border: 2px solid #3498db;
-  border-radius: 3px;
-  padding: 2px 4px;
-  font-family: 'Courier New', monospace;
-}
-
-.element-name {
-  color: #3498db;
-  font-weight: bold;
-}
-
-.element-value-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: inherit;
-  color: #2c3e50;
-  min-width: 50px;
-  max-width: 200px;
-}
-
-.element-value-input:focus {
-  background-color: #f8f9fa;
-  border-radius: 2px;
-}
-
-/* Hover effects */
-.node-line:hover .node-name {
-  color: #3498db;
-}
-
-.node-line:hover .node-value {
-  color: #2c3e50;
+.form-section:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 </style>

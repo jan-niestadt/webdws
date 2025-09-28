@@ -19,11 +19,11 @@ const getTypeBasedDefault = (type: string): string => {
   }
 
   if (lowerType.includes('date')) {
-    return new Date().toISOString().split('T')[0];
+    return '';
   }
 
   if (lowerType.includes('year')) {
-    return new Date().getFullYear().toString();
+    return '';
   }
 
   // For other types, return empty string

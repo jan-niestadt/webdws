@@ -125,7 +125,7 @@ const showDocumentList = ref(false);
 const documents = ref<XmlDocument[]>([]);
 const selectedDocument = ref<XmlDocument | null>(null);
 const validationResult = ref<{ valid: boolean; error?: string } | null>(null);
-const editorMode = ref<'text' | 'tree'>('text');
+const editorMode = ref<'text' | 'tree'>('tree');
 const initialTreeContent = ref('');
 const initialTreeNode = ref<XmlNode | null>(null);
 
@@ -449,7 +449,8 @@ const createElementWithRequiredContent = (schemaElement: SchemaElement, parentId
     name: schemaElement.name,
     value: '',
     parent: parentId,
-    children: []
+    children: [],
+    expanded: true
   };
   
   // Add required attributes
@@ -555,7 +556,8 @@ const newDocument = () => {
       type: 'element',
       name: 'root',
       value: '',
-      children: []
+      children: [],
+      expanded: true
     };
   }
   
