@@ -82,17 +82,18 @@
             @edit="$emit('edit', $event)"
             @delete="$emit('delete', $event)"
             @add-element="$emit('add-element', $event)"
+            @add-attribute="$emit('add-attribute', $event)"
           />
           
-                  <!-- Add buttons for repeatable child elements -->
+                  <!-- Add buttons for repeatable child elements and optional attributes -->
                   <div v-if="addButtons.length > 0" class="add-element-button-container">
                     <button 
                       v-for="button in addButtons" 
-                      :key="button.elementName"
-                      @click="addChildElement(button.elementName)" 
+                      :key="`${button.type}-${button.name}`"
+                      @click="addChild(button)" 
                       class="btn-add-element"
                     >
-                      <span class="btn-icon">➕</span>
+                      <span class="btn-icon">{{ button.type === 'attribute' ? '🏷️' : '➕' }}</span>
                       Add {{ button.displayName }}
                     </button>
                   </div>
@@ -211,6 +212,7 @@ const emit = defineEmits<{
   'edit': [editData: { nodeId: string; field: string; value: any }];
   'delete': [nodeId: string];
   'add-element': [data: { parentId: string; elementName: string }];
+  'add-attribute': [data: { parentId: string; attributeName: string }];
 }>();
 
 // Reactive state for inline editing
@@ -231,6 +233,7 @@ watch(() => props.node.value, (newValue) => {
     editingValue.value = newValue || '';
   }
 });
+
 
 // Computed
 const isSimpleElement = computed(() => {
@@ -269,34 +272,59 @@ const addButtons = computed(() => {
   
   // Find the schema element definition for this element
   const schemaElement = findSchemaElement(props.node.name || '', props.schemaInfo.elements);
-  if (!schemaElement || !schemaElement.children) return [];
+  if (!schemaElement) return [];
   
   const buttons = [];
   
-  // Check each child element type
-  for (const childSchema of schemaElement.children) {
-    // Count existing children of this type
-    const existingCount = props.node.children.filter(child => 
-      child.type === 'element' && child.name === childSchema.name
-    ).length;
-    
-    // Show add button if:
-    // 1. It's a repeatable element (maxOccurs > 1 or unbounded) and we haven't reached the limit
-    // 2. It's a required element (minOccurs > 0) and we don't have the minimum required
-    const isRepeatable = childSchema.maxOccurs === 'unbounded' || parseInt(childSchema.maxOccurs) > 1;
-    const isRequired = childSchema.minOccurs > 0;
-    const needsMore = isRepeatable ? 
-      (childSchema.maxOccurs === 'unbounded' || existingCount < parseInt(childSchema.maxOccurs)) :
-      (isRequired && existingCount < childSchema.minOccurs);
-    
-    if (needsMore) {
-      buttons.push({
-        elementName: childSchema.name,
-        displayName: childSchema.name.charAt(0).toUpperCase() + childSchema.name.slice(1)
-      });
+  // Explicitly reference children to ensure reactivity
+  const children = props.node.children;
+  
+  
+  // Check child elements
+  if (schemaElement.children) {
+    for (const childSchema of schemaElement.children) {
+      // Count existing children of this type
+      const existingCount = children.filter(child => 
+        child.type === 'element' && child.name === childSchema.name
+      ).length;
+      
+      // Show add button if:
+      // 1. It's a repeatable element (maxOccurs > 1 or unbounded) and we haven't reached the limit
+      // 2. It's a required element (minOccurs > 0) and we don't have the minimum required
+      const isRepeatable = childSchema.maxOccurs === 'unbounded' || parseInt(childSchema.maxOccurs) > 1;
+      const isRequired = childSchema.minOccurs > 0;
+      const needsMore = isRepeatable ? 
+        (childSchema.maxOccurs === 'unbounded' || existingCount < parseInt(childSchema.maxOccurs)) :
+        (isRequired && existingCount < childSchema.minOccurs);
+      
+      if (needsMore) {
+        buttons.push({
+          type: 'element',
+          name: childSchema.name,
+          displayName: childSchema.name.charAt(0).toUpperCase() + childSchema.name.slice(1)
+        });
+      }
     }
   }
   
+  // Check attributes (both required and optional)
+  if (schemaElement.attributes) {
+    for (const attrSchema of schemaElement.attributes) {
+      // Check if this attribute already exists
+      const existingAttribute = children.find(child => 
+        child.type === 'attribute' && child.name === attrSchema.name
+      );
+      
+      // Show add button if the attribute doesn't exist (regardless of whether it's required or optional)
+      if (!existingAttribute) {
+        buttons.push({
+          type: 'attribute',
+          name: attrSchema.name,
+          displayName: attrSchema.name.charAt(0).toUpperCase() + attrSchema.name.slice(1)
+        });
+      }
+    }
+  }
   return buttons;
 });
 
@@ -584,12 +612,19 @@ const deleteNode = () => {
   showMenu.value = false;
 };
 
-// Add child element method
-const addChildElement = (elementName: string) => {
-  emit('add-element', {
-    parentId: props.node.id,
-    elementName: elementName
-  });
+// Add child element or attribute method
+const addChild = (button: { type: string; name: string }) => {
+  if (button.type === 'element') {
+    emit('add-element', {
+      parentId: props.node.id,
+      elementName: button.name
+    });
+  } else if (button.type === 'attribute') {
+    emit('add-attribute', {
+      parentId: props.node.id,
+      attributeName: button.name
+    });
+  }
 };
 
 // Boolean field methods

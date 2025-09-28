@@ -59,6 +59,7 @@
           @edit="editNode"
           @delete="deleteNode"
           @add-element="addElementToNode"
+          @add-attribute="addAttributeToNode"
         />
       </div>
     </div>
@@ -415,9 +416,14 @@ const removeNode = (nodeId: string) => {
   const parent = findNodeById(treeState.value.root!, node.parent!);
   if (parent) {
     parent.children = parent.children.filter(child => child.id !== nodeId);
+    
     if (treeState.value.selectedNodeId === nodeId) {
       treeState.value.selectedNodeId = null;
     }
+    
+    // Force reactivity update
+    treeState.value = { ...treeState.value };
+    
     markModified();
   }
 };
@@ -441,6 +447,32 @@ const addElementToNode = (data: { parentId: string; elementName: string }) => {
   const newElement = createElementWithRequiredContent(schemaElement, data.parentId);
   addChildNode(data.parentId, newElement);
   selectNode(newElement.id);
+};
+
+const addAttributeToNode = (data: { parentId: string; attributeName: string }) => {
+  const parent = findNodeById(treeState.value.root!, data.parentId);
+  if (!parent) return;
+  
+  // Find the parent element's schema to get attribute definition
+  const parentSchema = findSchemaElement(parent.name || '', props.schemaInfo?.elements || []);
+  if (!parentSchema || !parentSchema.attributes) return;
+  
+  // Find the attribute schema
+  const attrSchema = parentSchema.attributes.find(attr => attr.name === data.attributeName);
+  if (!attrSchema) return;
+  
+  // Create the new attribute with default value
+  const newAttribute: XmlNode = {
+    id: generateId(),
+    type: 'attribute',
+    name: data.attributeName,
+    value: getDefaultAttributeValue(attrSchema),
+    parent: data.parentId,
+    children: []
+  };
+  
+  addChildNode(data.parentId, newAttribute);
+  selectNode(newAttribute.id);
 };
 
 
